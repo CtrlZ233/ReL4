@@ -99,7 +99,7 @@ fn reserve_region(reg: PhyRegion, ndks_boot: &mut MutexGuard<NdksBoot>) {
     
     let mut i = 0;
     assert!(reg.start <= reg.end);
-    if is_reg_empty(reg) {
+    if reg.start == reg.end {
         return;
     }
 
@@ -162,12 +162,12 @@ fn merge_regions(ndks_boot: &mut MutexGuard<NdksBoot>) {
 
 fn insert_region(reg: Region, ndks_boot: &mut MutexGuard<NdksBoot>) {
     assert!(reg.start <= reg.end);
-    if is_reg_empty(reg) {
+    if reg.start == reg.end {
         return;
     }
 
     for i in 0..MAX_NUM_FREEMEM_REG {
-        if is_reg_empty(ndks_boot.freemem[i]) {
+        if ndks_boot.freemem[i].start == ndks_boot.freemem[i].end {
             reserve_region(PhyRegion::pptr_to_paddr_reg(reg), ndks_boot);
             ndks_boot.freemem[i] = reg;
             return;
@@ -175,9 +175,4 @@ fn insert_region(reg: Region, ndks_boot: &mut MutexGuard<NdksBoot>) {
     }
     error!("[insert_region] error!");
     assert!(1 == 0);
-}
-
-#[inline]
-fn is_reg_empty(reg: Region) -> bool {
-    reg.start == reg.end
 }

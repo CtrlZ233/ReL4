@@ -1,15 +1,23 @@
 use crate::config::PPTR_BASE_OFFSET;
+use crate::types::{Pptr, Paddr, Vptr};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Region {
-    pub start: usize,
-    pub end: usize,
+    pub start: Pptr,
+    pub end: Pptr,
 }
 
+#[derive(Default, Debug, Clone, Copy)]
+pub struct PhyRegion {
+    pub start: Paddr,
+    pub end: Paddr,
+}
 
-pub type PhyRegion = Region;
-
-pub type VirtRegion = Region;
+#[derive(Default, Debug, Clone, Copy)]
+pub struct VirtRegion {
+    pub start: Vptr,
+    pub end: Vptr,
+}
 
 impl Region {
     pub fn paddr_to_pptr_reg(p_reg: PhyRegion) -> Self {

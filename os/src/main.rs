@@ -16,7 +16,6 @@
 extern crate bitflags;
 
 use core::arch::{global_asm, asm};
-use config::ROOT_PAGE_TABLE_SIZE;
 use log::*;
 
 #[macro_use]
@@ -28,6 +27,9 @@ mod config;
 mod mm;
 mod utils;
 mod boot;
+mod root_server;
+mod vspace;
+mod types;
 
 
 global_asm!(include_str!("entry.asm"));

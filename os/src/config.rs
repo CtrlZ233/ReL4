@@ -26,3 +26,14 @@ pub const AVAIL_PHY_MEM_END: usize = 0x1_7ff0_0000;
 pub const NUM_RESERVED_REGIONS: usize = 3;
 pub const MAX_NUM_FREEMEM_REG: usize = 16;
 pub const MAX_NUM_RESV_REG: usize = NUM_RESERVED_REGIONS + MAX_NUM_FREEMEM_REG;
+
+pub const SEL4_SLOT_BITS: usize = 5;
+pub const SEL4_VSPACE_BITS: usize = PAGE_BITS;
+pub const SEL4_TCB_BITS: usize = 10;
+pub const SEL4_PAGE_BITS: usize = 12;
+pub const BI_FRAME_SIZE_BITS: usize = PAGE_BITS;
+pub const SEL4_ASID_POOL_BITS: usize = 12;
+
+
+pub const CONFIG_ROOT_CNODE_SIZE_BITS: usize = 13;
+
