@@ -34,3 +34,26 @@ pub fn is_aligned(n: usize, b: usize) -> bool {
 pub fn round_down(n: usize, b: usize) -> usize {
     (n >> b) << b
 }
+
+#[inline]
+pub fn round_up(n: usize, b: usize) ->usize {
+    (((n - 1) >> b) + 1) << b
+}
+
+#[inline]
+pub fn bool2usize(flag: bool) -> usize {
+    if flag { 1 } else { 0 }
+}
+
+pub fn clz32(i: u32) -> usize
+{
+    let mut ret = 0;
+
+    let mut temp = !i;
+
+    while temp & 0x80000000 != 0 {
+        temp <<= 1;
+        ret += 1;
+    }
+    return ret;
+}

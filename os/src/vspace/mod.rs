@@ -1,7 +1,8 @@
-use crate::{mm::Region, config::CONFIG_PT_LEVELS, utils::{get_lvl_page_size_bits, round_down, bit}};
+use crate::{config::CONFIG_PT_LEVELS, utils::{get_lvl_page_size_bits, round_down, bit}};
+use crate::mm::VirtRegion;
 
 
-pub fn get_n_paging(it_v_reg: Region) -> usize {
+pub fn get_n_paging(it_v_reg: VirtRegion) -> usize {
     let mut ans: usize = 0;
     for i in 0..CONFIG_PT_LEVELS - 1 {
         let bits = get_lvl_page_size_bits(i);

@@ -11,11 +11,11 @@
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
-#![feature(asm_sym)]
+#![feature(stdsimd)]
 #[macro_use]
 extern crate bitflags;
 
-use core::arch::{global_asm, asm};
+use core::arch::global_asm;
 use log::*;
 
 #[macro_use]
@@ -30,6 +30,7 @@ mod boot;
 mod root_server;
 mod vspace;
 mod types;
+mod cspace;
 
 
 global_asm!(include_str!("entry.asm"));
@@ -62,8 +63,8 @@ pub fn rust_main() -> ! {
     clear_bss();
     logging::init();
     mm::init();
-    boot::boot_mem_init();
-    // println!("[kernel] Hello, world!");
+    boot::init();
+    println!("[kernel] Hello, world!");
     trace!(
         "[kernel] .text [{:#x}, {:#x})",
         stext as usize,

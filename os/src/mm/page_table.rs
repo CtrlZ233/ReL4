@@ -1,5 +1,4 @@
 use bitflags::*;
-use log::debug;
 use crate::config::PAGE_BITS;
 use super::address::PhysPageNum;
 bitflags! {

@@ -12,7 +12,7 @@ use crate::utils::*;
 
 use crate::config::{CONFIG_PT_LEVELS, PPTR_BASE, PPTR_TOP, PADDR_BASE, PPTR_BASE_OFFSET,
                 ROOT_PAGE_TABLE_SIZE, KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, 
-                SATP_MODE_SV39, PAGE_BITS, PV_BASE_OFFSET};
+                PAGE_BITS, PV_BASE_OFFSET};
 
 pub fn init() {
     map_kernel_window();
@@ -83,5 +83,4 @@ pub fn activate_kernel_vspace() {
         satp::set(satp::Mode::Sv39, 0, root_page_table_paddr >> PAGE_BITS);
         sfence_vma_all();
     }
-
 }

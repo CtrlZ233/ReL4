@@ -21,7 +21,7 @@ pub const SATP_MODE_SV39: usize = 8;
 
 pub const AVAIL_MEM_DEVICE: usize = 1;
 pub const AVAIL_PHY_MEM_START: usize = 0x8000_0000;
-pub const AVAIL_PHY_MEM_END: usize = 0x1_7ff0_0000;
+pub const AVAIL_PHY_MEM_END: usize = 0x8800_0000;
 
 pub const NUM_RESERVED_REGIONS: usize = 3;
 pub const MAX_NUM_FREEMEM_REG: usize = 16;
@@ -33,7 +33,16 @@ pub const SEL4_TCB_BITS: usize = 10;
 pub const SEL4_PAGE_BITS: usize = 12;
 pub const BI_FRAME_SIZE_BITS: usize = PAGE_BITS;
 pub const SEL4_ASID_POOL_BITS: usize = 12;
+pub const SEL4_WORD_BITS: usize = 64;
 
 
 pub const CONFIG_ROOT_CNODE_SIZE_BITS: usize = 13;
+
+// root server image
+pub const UI_P_REG_START: usize = 0x84020000;
+pub const UI_P_REG_END: usize = 0x84427000;
+pub const UI_PV_OFFSET: usize = 0x84010000;
+pub const UI_V_ENTRY: usize = 0x1b932;
+pub const USER_TOP: usize = 0x0000003FFFFFF000;
+
 

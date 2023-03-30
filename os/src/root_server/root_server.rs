@@ -2,12 +2,12 @@ use crate::{types::Pptr, mm::Region};
 
 #[derive(Default, Debug)]
 pub struct RootServer {
-    cnode: Pptr,
-    vspace: Pptr,
-    asid_pool: Pptr,
-    ipc_buf: Pptr,
-    boot_info: Pptr,
-    extra_bi: Pptr,
-    tcb: Pptr,
-    paging: Region,
+    pub cnode: Pptr,
+    pub vspace: Pptr,
+    pub asid_pool: Pptr,
+    pub ipc_buf: Pptr,
+    pub boot_info: Pptr,
+    pub extra_bi: Pptr,
+    pub tcb: Pptr,
+    pub paging: Region,
 }

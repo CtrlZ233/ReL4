@@ -3,35 +3,30 @@ use core::cmp::min;
 use log::{error, debug};
 use spin::MutexGuard;
 
-use crate::{mm::{Region, PhyRegion, VirtRegion}, config::{KERNEL_ELF_BASE, PV_BASE_OFFSET, MAX_NUM_FREEMEM_REG, AVAIL_MEM_DEVICE, MAX_NUM_RESV_REG, PPTR_BASE_OFFSET}};
+use crate::{mm::{Region, PhyRegion}, config::{KERNEL_ELF_BASE, PV_BASE_OFFSET, MAX_NUM_FREEMEM_REG, AVAIL_MEM_DEVICE, MAX_NUM_RESV_REG, PPTR_BASE_OFFSET}};
 use super::{RES_REG, NDKS_BOOT, AVAIL_REG, AVAIL_P_REGS, ndks_boot::NdksBoot};
 
 
-pub fn init(ui_reg: Region, it_v_reg: VirtRegion) {
+pub fn init(ui_reg: Region) {
     let mut index = 1;
-    unsafe {
-        let mut res_reg = RES_REG.lock();
-        res_reg[0].start = KERNEL_ELF_BASE - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
-        extern "C" {
-            fn kernel_end();
-        }
-        res_reg[0].end = kernel_end as usize - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
-        res_reg[index] = ui_reg;
-        index += 1;
+    let mut res_reg = RES_REG.lock();
+    res_reg[0].start = KERNEL_ELF_BASE - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
+    extern "C" {
+        fn kernel_end();
     }
+    res_reg[0].end = kernel_end as usize - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
+    res_reg[index] = ui_reg;
+    index += 1;
 
-    
-    {
-        let res_reg = RES_REG.lock();
-        for i in 0..index {
-            debug!("reserved_{}: {:#x} ... {:#x}", i, res_reg[i].start, res_reg[i].end);
-        }
+    for i in 0..index {
+        debug!("reserved_{}: {:#x} ... {:#x}", i, res_reg[i].start, res_reg[i].end);
     }
+    drop(res_reg);
 
-    init_freemem(AVAIL_MEM_DEVICE, index, it_v_reg);
+    init_freemem(AVAIL_MEM_DEVICE, index);
 }
 
-fn init_freemem(n_available: usize, n_reserved: usize, it_v_reg: VirtRegion) {
+fn init_freemem(n_available: usize, n_reserved: usize) {
     let reserved = RES_REG.lock();
     let mut ndks_boot = NDKS_BOOT.lock();
     let mut avail_reg = AVAIL_REG.lock();
@@ -96,7 +91,6 @@ fn init_freemem(n_available: usize, n_reserved: usize, it_v_reg: VirtRegion) {
 }
 
 fn reserve_region(reg: PhyRegion, ndks_boot: &mut MutexGuard<NdksBoot>) {
-    
     let mut i = 0;
     assert!(reg.start <= reg.end);
     if reg.start == reg.end {
