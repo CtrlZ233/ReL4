@@ -2,13 +2,16 @@ mod init_freemem;
 mod ndks_boot;
 mod boot_info;
 
-use crate::{mm::{Region, PhyRegion, VirtRegion}, config::{NUM_RESERVED_REGIONS, MAX_NUM_FREEMEM_REG, AVAIL_PHY_MEM_START, AVAIL_PHY_MEM_END, AVAIL_MEM_DEVICE}};
+use crate::config::{NUM_RESERVED_REGIONS, MAX_NUM_FREEMEM_REG, AVAIL_PHY_MEM_START, AVAIL_PHY_MEM_END, AVAIL_MEM_DEVICE};
+use crate::types::{Region, PhyRegion, VirtRegion};
 use lazy_static::*;
 use spin::Mutex;
 use ndks_boot::NdksBoot;
-use crate::boot::boot_info::{BootInfoHeader, calculate_extra_bi_size_bits};
 use crate::config::{BI_FRAME_SIZE_BITS, PAGE_BITS, UI_P_REG_END, UI_P_REG_START, UI_PV_OFFSET, USER_TOP};
 use crate::utils::bit;
+
+pub use boot_info::{calculate_extra_bi_size_bits, BootInfo, BootInfoID, BootInfoHeader};
+use crate::types::Vptr;
 
 lazy_static!{
     static ref RES_REG: Mutex<[Region; NUM_RESERVED_REGIONS]> = Mutex::new([Region::default(); NUM_RESERVED_REGIONS]);
@@ -25,8 +28,10 @@ fn boot_mem_init(ui_reg: Region) {
     init_freemem::init(ui_reg);
 }
 
-fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
-    crate::root_server::root_server_init(it_v_reg, extra_bi_size_bits);
+fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize, ipc_buf_vptr: Vptr, extra_bi_size: usize,
+                    extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr) {
+    crate::root_server::init(it_v_reg, extra_bi_size_bits, ipc_buf_vptr, extra_bi_size, extra_bi_offset,
+                             bi_frame_vptr, extra_bi_frame_vptr);
 }
 
 pub fn init() {
@@ -40,10 +45,11 @@ pub fn init() {
         end: UI_P_REG_END - UI_PV_OFFSET,
     };
 
-    let ipcbuf_vptr = ui_v_reg.end;
-    let bi_frame_vptr = ipcbuf_vptr + bit(PAGE_BITS);
+    let ipc_buf_vptr = ui_v_reg.end;
+    let bi_frame_vptr = ipc_buf_vptr + bit(PAGE_BITS);
     let extra_bi_frame_vptr = bi_frame_vptr + bit(BI_FRAME_SIZE_BITS);
     let extra_bi_size = core::mem::size_of::<BootInfoHeader>();
+    let extra_bi_offset: usize = 0;
 
     let extra_bi_size_bits = calculate_extra_bi_size_bits(extra_bi_size);
 
@@ -54,6 +60,7 @@ pub fn init() {
     assert!(it_v_reg.end < USER_TOP);
 
     boot_mem_init(ui_reg);
-    root_server_init(it_v_reg, extra_bi_size_bits);
-
+    root_server_init(it_v_reg, extra_bi_size_bits, ipc_buf_vptr, extra_bi_size, extra_bi_offset,
+                     bi_frame_vptr, extra_bi_frame_vptr);
 }
+

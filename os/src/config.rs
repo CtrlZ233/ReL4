@@ -35,14 +35,24 @@ pub const BI_FRAME_SIZE_BITS: usize = PAGE_BITS;
 pub const SEL4_ASID_POOL_BITS: usize = 12;
 pub const SEL4_WORD_BITS: usize = 64;
 
+pub const SEL4_MSG_MAX_LEN: usize = 120;
+pub const SEL4_MSG_EXTRA_CAP_BITS: usize = 2;
+pub const SEL4_MSG_MAX_EXTRA_CAPS: usize = (1 << SEL4_MSG_EXTRA_CAP_BITS) - 1;
 
 pub const CONFIG_ROOT_CNODE_SIZE_BITS: usize = 13;
-
+pub const CONFIG_MAX_NUM_NODES: usize = 1;
 // root server image
 pub const UI_P_REG_START: usize = 0x84020000;
 pub const UI_P_REG_END: usize = 0x84427000;
 pub const UI_PV_OFFSET: usize = 0x84010000;
 pub const UI_V_ENTRY: usize = 0x1b932;
 pub const USER_TOP: usize = 0x0000003FFFFFF000;
+
+pub const IT_ASID: usize = 1;
+
+// schedule
+pub const KS_DOM_SCHEDULE_LENGTH: usize = 1;
+
+
 
 

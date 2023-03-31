@@ -1,22 +1,35 @@
 mod root_server;
 
 use core::cmp::max;
+use core::sync::atomic::Ordering::SeqCst;
 use lazy_static::*;
 use log::{debug, error};
 use spin::Mutex;
-use crate::{config::{CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS}, mm::Region, utils::bit, vspace::get_n_paging};
-use crate::boot::NDKS_BOOT;
-use crate::config::MAX_NUM_FREEMEM_REG;
-use crate::cspace::{CapTag, create_root_cnode};
-use crate::mm::VirtRegion;
-use crate::types::Pptr;
-use crate::utils::round_down;
+use crate::{config::{CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS}, utils::bit};
+use crate::boot::{BootInfo, BootInfoHeader, BootInfoID, NDKS_BOOT};
+use crate::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE};
+use crate::cspace::{Cap, CapTag, CNodeSlot, create_bi_frame_cap, create_domain_cap, create_frame_cap, create_it_pt_cap, create_page_table_cap, create_root_cnode};
+use crate::cspace::CNodeSlot::SeL4CapInitThreadIpcBuffer;
+use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry};
+use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX};
+use crate::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
+use crate::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down};
 
 use self::root_server::RootServer;
 
 lazy_static! {
     static ref ROOT_SERVER_MEM: Mutex<Region> = Mutex::new(Region::default());
     pub static ref ROOT_SERVER: Mutex<RootServer> = Mutex::new(RootServer::default());
+}
+
+pub fn init(it_v_reg: VirtRegion, extra_bi_size_bits: usize, ipc_buf_vptr: Vptr, extra_bi_size: usize,
+            extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr) {
+    root_server_init(it_v_reg, extra_bi_size_bits);
+    populate_bi_frame(0, CONFIG_MAX_NUM_NODES, ipc_buf_vptr, extra_bi_size_bits, extra_bi_size);
+
+    init_boot_info_header(extra_bi_size, extra_bi_offset);
+
+    create_all_caps(it_v_reg, bi_frame_vptr, extra_bi_size, extra_bi_frame_vptr, ipc_buf_vptr);
 }
 
 pub fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
@@ -53,14 +66,146 @@ pub fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
         i -= 1;
     }
 
+    debug!("no free memory region is big enough for root server");
+    assert_eq!(1, 0);
+}
+
+fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usize,
+                   extra_bi_frame_vptr: Vptr,ipc_buf_vptr: Vptr) {
     let root_cnode_cap = create_root_cnode();
     if root_cnode_cap.get_cap_type() == CapTag::CapNullCap {
         error!("root c-node creation failed");
         assert_eq!(1, 0);
     }
+    create_domain_cap(root_cnode_cap);
+    let it_vspace_cap = create_it_address_space(root_cnode_cap, it_v_reg).unwrap();
 
-    debug!("no free memory region is big enough for root server");
-    assert_eq!(1, 0);
+    let bi_frame_cap = create_bi_frame_cap(root_cnode_cap, bi_frame_vptr, ROOT_SERVER.lock().boot_info);
+    map_frame_cap(it_vspace_cap, bi_frame_cap);
+
+    match maybe_create_extra_bi_frame_cap(root_cnode_cap, it_vspace_cap, extra_bi_size, extra_bi_frame_vptr) {
+        None => {}
+        Some(region) => {
+            let boot_info = unsafe {
+                &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
+            };
+            boot_info.extra_bi_pages = region;
+        }
+    }
+
+    let ipc_buf_ptr = ROOT_SERVER.lock().ipc_buf;
+    (ipc_buf_ptr as usize..(ipc_buf_ptr + bit(PAGE_BITS)) as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
+    let ipc_buf_cap = create_frame_cap(root_cnode_cap, ipc_buf_vptr, ROOT_SERVER.lock().ipc_buf,
+                                      SeL4CapInitThreadIpcBuffer as usize, IT_ASID);
+    map_frame_cap(it_vspace_cap, ipc_buf_cap);
+
+}
+
+fn maybe_create_extra_bi_frame_cap(root_cnode_cap: Cap, vspace_cap: Cap, extra_bi_size: usize,
+                                   extra_bi_frame_vptr: Vptr) -> Option<SlotRegion> {
+    if extra_bi_size > 0 {
+        let mut start = ROOT_SERVER.lock().extra_bi;
+        let end = start + extra_bi_size;
+        let pv_offset = (extra_bi_frame_vptr as isize) - ((start - PPTR_BASE) as isize);
+        let slot_before = NDKS_BOOT.lock().slot_pos_cur;
+        while start < end {
+            let frame_cap = create_frame_cap(root_cnode_cap, ((start - PPTR_BASE) as isize + pv_offset) as usize,
+                                             start,NDKS_BOOT.lock().slot_pos_cur, IT_ASID);
+            NDKS_BOOT.lock().slot_pos_cur += 1;
+            map_frame_cap(vspace_cap, frame_cap);
+            start += bit(PAGE_BITS);
+        }
+        let slot_after = NDKS_BOOT.lock().slot_pos_cur;
+        return Some(SlotRegion {
+            start: slot_before,
+            end: slot_after,
+        });
+    }
+    None
+}
+
+
+
+
+fn create_it_address_space(root_cnode_cap: Cap, it_v_reg: VirtRegion) -> Option<Cap> {
+    let vspace = unsafe {
+        &mut *(ROOT_SERVER.lock().vspace as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
+    };
+    copy_global_mappings(vspace);
+    let vspace_ptr = ROOT_SERVER.lock().vspace;
+    let lvl1pt_cap = create_page_table_cap(root_cnode_cap,
+                                           IT_ASID,
+                                           vspace_ptr,
+                                           true,
+                                           vspace_ptr);
+    let slot_before = NDKS_BOOT.lock().slot_pos_cur;
+
+    for i in 0..(CONFIG_PT_LEVELS - 1) {
+        let mut pt_vptr = round_down(it_v_reg.start, get_lvl_page_size_bits(i)) as Vptr;
+        while pt_vptr < it_v_reg.end {
+            let cap = create_it_pt_cap(root_cnode_cap, it_alloc_paging(), pt_vptr, IT_ASID);
+            map_it_pt_cap(lvl1pt_cap, cap);
+            pt_vptr += get_lvl_page_size(i);
+        }
+    }
+
+    let slot_after = NDKS_BOOT.lock().slot_pos_cur;
+    let bi_frame = unsafe {
+        &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
+    };
+    bi_frame.user_image_paging = SlotRegion {
+        start: slot_before,
+        end: slot_after,
+    };
+    Some(lvl1pt_cap)
+}
+
+fn populate_bi_frame(node_id: NodeId, num_nodes: usize, ipc_buf_vptr: Vptr, extra_bi_size_bits: usize, extra_bi_size: usize) {
+    // clear boot info mem
+    let mut start = ROOT_SERVER.lock().boot_info;
+    let mut end = start + bit(BI_FRAME_SIZE_BITS);
+    (start as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
+
+    if extra_bi_size_bits != 0 {
+        start = ROOT_SERVER.lock().extra_bi;
+        end = start + bit(extra_bi_size_bits);
+        (start as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
+    }
+
+    let boot_info = unsafe {
+        &mut *(ROOT_SERVER.lock().boot_info as *mut BootInfo)
+    };
+    boot_info.node_id = node_id;
+    boot_info.num_nodes = num_nodes;
+    boot_info.num_io_pt_levels = 0;
+    boot_info.ipc_buf_ptr = ipc_buf_vptr;
+    boot_info.init_thread_cnode_size_bits = CONFIG_ROOT_CNODE_SIZE_BITS;
+    boot_info.init_thread_domain = KS_DOM_SCHEDULE.lock()[KS_DOM_SCHEDULE_IDX.load(SeqCst)].domain;
+    boot_info.extra_len = extra_bi_size;
+
+    NDKS_BOOT.lock().boot_info_ptr = boot_info as *const BootInfo as Pptr;
+    NDKS_BOOT.lock().slot_pos_cur = CNodeSlot::SeL4NumInitialCaps as usize;
+    unsafe {
+        let ndks_boot = NDKS_BOOT.lock();
+        let boot_info = &*(ndks_boot.boot_info_ptr as *const BootInfo);
+        debug!("node_id: {}, num_nodes: {}, num_io_pt_levels: {}, ipc_buf_ptr: {:#x},\
+            init_thread_cnode_size_bits: {}, init_thread_domain: {}, extra_len: {}", boot_info.node_id,
+            boot_info.num_nodes, boot_info.num_io_pt_levels, boot_info.ipc_buf_ptr, boot_info.init_thread_cnode_size_bits,
+            boot_info.init_thread_domain, boot_info.extra_len);
+    }
+}
+
+fn init_boot_info_header(extra_bi_size: usize, extra_bi_offset: usize) {
+    let mut header: BootInfoHeader = BootInfoHeader { id: 0, len: 0 };
+    if extra_bi_size > extra_bi_offset {
+        header.id = BootInfoID::Sel4BootInfoHeaderPadding as usize;
+        header.len = extra_bi_size - extra_bi_offset;
+        let bih = unsafe {
+            &mut *((ROOT_SERVER.lock().extra_bi + extra_bi_offset) as *mut BootInfoHeader)
+        };
+        bih.id = header.id;
+        bih.len = header.len;
+    }
 }
 
 fn root_server_max_size_bits(extra_bi_size_bits: usize) -> usize {
@@ -115,6 +260,14 @@ fn create_root_server_objects(start: usize, it_v_reg: VirtRegion, extra_bi_size_
     {
         let root_server_mm = ROOT_SERVER_MEM.lock();
         assert_eq!(root_server_mm.start, root_server_mm.end);
+        let root_server = ROOT_SERVER.lock();
+        debug!("root_server.cnode: {:#x}", root_server.cnode);
+        debug!("root_server.vspace: {:#x}", root_server.vspace);
+        debug!("root_server.asid_pool: {:#x}", root_server.asid_pool);
+        debug!("root_server.ipc_buf: {:#x}", root_server.ipc_buf);
+        debug!("root_server.boot_info: {:#x}", root_server.boot_info);
+        debug!("root_server.extra_bi: {:#x}", root_server.extra_bi);
+        debug!("root_server.paging: {:#x} ... {:#x}", root_server.paging.start, root_server.paging.end);
     }
 }
 
@@ -133,4 +286,13 @@ fn maybe_alloc_extra_bi(cmp_size_bits: usize, extra_bi_size_bits: usize) {
     if extra_bi_size_bits >= cmp_size_bits && ROOT_SERVER.lock().extra_bi == 0 {
         ROOT_SERVER.lock().extra_bi = alloc_root_server_obj(extra_bi_size_bits, 1);
     }
+}
+
+fn it_alloc_paging() -> Pptr {
+    // debug!("test8");
+    let allocated = ROOT_SERVER.lock().paging.start;
+    ROOT_SERVER.lock().paging.start += bit(PAGE_BITS);
+    // assert!(ROOT_SERVER.lock().paging.start <=  ROOT_SERVER.lock().paging.end);
+
+    allocated
 }

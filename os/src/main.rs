@@ -28,9 +28,10 @@ mod mm;
 mod utils;
 mod boot;
 mod root_server;
-mod vspace;
 mod types;
 mod cspace;
+mod scheduler;
+mod ipc;
 
 
 global_asm!(include_str!("entry.asm"));

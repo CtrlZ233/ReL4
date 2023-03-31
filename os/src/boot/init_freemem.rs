@@ -3,8 +3,9 @@ use core::cmp::min;
 use log::{error, debug};
 use spin::MutexGuard;
 
-use crate::{mm::{Region, PhyRegion}, config::{KERNEL_ELF_BASE, PV_BASE_OFFSET, MAX_NUM_FREEMEM_REG, AVAIL_MEM_DEVICE, MAX_NUM_RESV_REG, PPTR_BASE_OFFSET}};
+use crate::{config::{KERNEL_ELF_BASE, PV_BASE_OFFSET, MAX_NUM_FREEMEM_REG, AVAIL_MEM_DEVICE, MAX_NUM_RESV_REG, PPTR_BASE_OFFSET}};
 use super::{RES_REG, NDKS_BOOT, AVAIL_REG, AVAIL_P_REGS, ndks_boot::NdksBoot};
+use crate::types::{Region, PhyRegion};
 
 
 pub fn init(ui_reg: Region) {

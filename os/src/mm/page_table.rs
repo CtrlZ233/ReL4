@@ -1,6 +1,6 @@
 use bitflags::*;
-use crate::config::PAGE_BITS;
-use super::address::PhysPageNum;
+use crate::config::{PAGE_BITS, PPTR_BASE_OFFSET};
+use crate::types::Pptr;
 bitflags! {
     pub struct PTEFlags: u8 {
         const V = 1 << 0;
@@ -21,9 +21,9 @@ pub struct PageTableEntry {
 }
 
 impl PageTableEntry {
-    pub fn new(ppn: PhysPageNum, sw: usize, flags: PTEFlags) -> Self {
+    pub fn new(ppn: usize, sw: usize, flags: PTEFlags) -> Self {
         PageTableEntry {
-            bits: ppn.0 << 10 | (sw & 0x3) << 8 | flags.bits as usize,
+            bits: ppn << 10 | (sw & 0x3) << 8 | flags.bits as usize,
         }
     }
 
@@ -34,13 +34,13 @@ impl PageTableEntry {
             flag = flag | PTEFlags::R | PTEFlags::W | PTEFlags::X | PTEFlags::D | PTEFlags::A;
         }
 
-        Self::new(PhysPageNum{ 0: ppn }, 0, flag)
+        Self::new(ppn, 0, flag)
     }
 
     pub fn empty() -> Self {
         PageTableEntry { bits: 0 }
     }
-    pub fn ppn(&self) -> PhysPageNum {
+    pub fn ppn(&self) -> usize {
         (self.bits >> 10 & ((1usize << 44) - 1)).into()
     }
     pub fn flags(&self) -> PTEFlags {
@@ -57,5 +57,13 @@ impl PageTableEntry {
     }
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
+    }
+
+    pub fn is_pte_page_table(&self) -> bool {
+        self.is_valid() && !(self.readable() || self.writable() || self.executable())
+    }
+
+    pub fn get_pptr_from_hw_pte(&self) -> Pptr {
+        (self.ppn() << PAGE_BITS) + PPTR_BASE_OFFSET
     }
 }
