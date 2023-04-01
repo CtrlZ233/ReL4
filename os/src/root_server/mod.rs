@@ -5,13 +5,13 @@ use core::sync::atomic::Ordering::SeqCst;
 use lazy_static::*;
 use log::{debug, error};
 use spin::Mutex;
-use crate::{config::{CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS}, utils::bit};
+use crate::{config::{CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS}, utils::bit, cspace::{create_asid_pool_cap, create_asid_control_cap}, mm::ASIDPool};
 use crate::boot::{BootInfo, BootInfoHeader, BootInfoID, NDKS_BOOT};
 use crate::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE};
 use crate::cspace::{Cap, CapTag, CNodeSlot, create_bi_frame_cap, create_domain_cap, create_frame_cap, create_it_pt_cap, create_page_table_cap, create_root_cnode};
 use crate::cspace::CNodeSlot::SeL4CapInitThreadIpcBuffer;
 use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry};
-use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX};
+use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX, create_idle_thread};
 use crate::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
 use crate::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down};
 
@@ -23,13 +23,14 @@ lazy_static! {
 }
 
 pub fn init(it_v_reg: VirtRegion, extra_bi_size_bits: usize, ipc_buf_vptr: Vptr, extra_bi_size: usize,
-            extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr) {
+            extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr, ui_reg: Region,
+            ui_vp_offset: isize) {
     root_server_init(it_v_reg, extra_bi_size_bits);
     populate_bi_frame(0, CONFIG_MAX_NUM_NODES, ipc_buf_vptr, extra_bi_size_bits, extra_bi_size);
 
     init_boot_info_header(extra_bi_size, extra_bi_offset);
 
-    create_all_caps(it_v_reg, bi_frame_vptr, extra_bi_size, extra_bi_frame_vptr, ipc_buf_vptr);
+    create_all_caps(it_v_reg, bi_frame_vptr, extra_bi_size, extra_bi_frame_vptr, ipc_buf_vptr, ui_reg, ui_vp_offset);
 }
 
 pub fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
@@ -71,7 +72,8 @@ pub fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
 }
 
 fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usize,
-                   extra_bi_frame_vptr: Vptr,ipc_buf_vptr: Vptr) {
+                   extra_bi_frame_vptr: Vptr,ipc_buf_vptr: Vptr, ui_reg: Region,
+                   ui_vp_offset: isize) {
     let root_cnode_cap = create_root_cnode();
     if root_cnode_cap.get_cap_type() == CapTag::CapNullCap {
         error!("root c-node creation failed");
@@ -83,12 +85,12 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
     let bi_frame_cap = create_bi_frame_cap(root_cnode_cap, bi_frame_vptr, ROOT_SERVER.lock().boot_info);
     map_frame_cap(it_vspace_cap, bi_frame_cap);
 
+    let boot_info = unsafe {
+        &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
+    };
     match maybe_create_extra_bi_frame_cap(root_cnode_cap, it_vspace_cap, extra_bi_size, extra_bi_frame_vptr) {
         None => {}
         Some(region) => {
-            let boot_info = unsafe {
-                &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
-            };
             boot_info.extra_bi_pages = region;
         }
     }
@@ -99,6 +101,19 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
                                       SeL4CapInitThreadIpcBuffer as usize, IT_ASID);
     map_frame_cap(it_vspace_cap, ipc_buf_cap);
 
+    let user_image_frames_reg = create_frame_caps_of_region(root_cnode_cap, it_vspace_cap, ui_reg, ui_vp_offset, IT_ASID);
+    boot_info.user_image_frames = user_image_frames_reg;
+
+    let it_ap_cap = create_asid_pool_cap(root_cnode_cap, IT_ASID, ROOT_SERVER.lock().asid_pool);
+    create_asid_control_cap(root_cnode_cap);
+    unsafe {
+        let asid_pool =  &mut *(it_ap_cap.get_cap_pptr() as *mut ASIDPool);
+        asid_pool.write(IT_ASID, it_vspace_cap.get_cap_pptr());
+    }
+    debug!("create_idle_thread begin");
+
+    create_idle_thread();
+
 }
 
 fn maybe_create_extra_bi_frame_cap(root_cnode_cap: Cap, vspace_cap: Cap, extra_bi_size: usize,
@@ -106,25 +121,29 @@ fn maybe_create_extra_bi_frame_cap(root_cnode_cap: Cap, vspace_cap: Cap, extra_b
     if extra_bi_size > 0 {
         let mut start = ROOT_SERVER.lock().extra_bi;
         let end = start + extra_bi_size;
-        let pv_offset = (extra_bi_frame_vptr as isize) - ((start - PPTR_BASE) as isize);
-        let slot_before = NDKS_BOOT.lock().slot_pos_cur;
-        while start < end {
-            let frame_cap = create_frame_cap(root_cnode_cap, ((start - PPTR_BASE) as isize + pv_offset) as usize,
-                                             start,NDKS_BOOT.lock().slot_pos_cur, IT_ASID);
-            NDKS_BOOT.lock().slot_pos_cur += 1;
-            map_frame_cap(vspace_cap, frame_cap);
-            start += bit(PAGE_BITS);
-        }
-        let slot_after = NDKS_BOOT.lock().slot_pos_cur;
-        return Some(SlotRegion {
-            start: slot_before,
-            end: slot_after,
-        });
+        let pv_offset = ((start - PPTR_BASE) as isize) - (extra_bi_frame_vptr as isize);
+        return Some(create_frame_caps_of_region(root_cnode_cap, vspace_cap, Region { start, end }, pv_offset, IT_ASID));
     }
     None
 }
 
 
+fn create_frame_caps_of_region(root_cnode_cap: Cap,vspace_cap: Cap, reg: Region, pv_offset: isize, asid: usize) -> SlotRegion {
+    let slot_before = NDKS_BOOT.lock().slot_pos_cur;
+    let mut start = reg.start;
+    while start < reg.end {
+        let frame_cap = create_frame_cap(root_cnode_cap, ((start - PPTR_BASE) as isize - pv_offset) as usize,
+                                            start, NDKS_BOOT.lock().slot_pos_cur, asid);
+        NDKS_BOOT.lock().slot_pos_cur += 1;
+        map_frame_cap(vspace_cap, frame_cap);
+        start += bit(PAGE_BITS);
+    }
+    let slot_after = NDKS_BOOT.lock().slot_pos_cur;
+    SlotRegion {
+        start: slot_before,
+        end: slot_after,
+    }
+}
 
 
 fn create_it_address_space(root_cnode_cap: Cap, it_v_reg: VirtRegion) -> Option<Cap> {
@@ -289,7 +308,6 @@ fn maybe_alloc_extra_bi(cmp_size_bits: usize, extra_bi_size_bits: usize) {
 }
 
 fn it_alloc_paging() -> Pptr {
-    // debug!("test8");
     let allocated = ROOT_SERVER.lock().paging.start;
     ROOT_SERVER.lock().paging.start += bit(PAGE_BITS);
     // assert!(ROOT_SERVER.lock().paging.start <=  ROOT_SERVER.lock().paging.end);

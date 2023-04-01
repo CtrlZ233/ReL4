@@ -1,7 +1,8 @@
 use log::{debug, error};
 use crate::config::{CONFIG_ROOT_CNODE_SIZE_BITS, IT_ASID, SEL4_WORD_BITS};
-use crate::cspace::cnode::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame};
+use crate::cspace::cnode::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
 use crate::root_server::ROOT_SERVER;
+use crate::types::ASIDSizeConstants;
 use crate::types::{Pptr, Vptr, VmRights::VMReadWrite};
 
 mod cnode;
@@ -56,6 +57,17 @@ pub fn create_frame_cap(cnode_cap: Cap, vptr: Vptr, pptr: Pptr, index: usize, as
     cap
 }
 
+pub fn create_asid_pool_cap(cnode_cap: Cap, asid: usize, asid_pool_ptr: Pptr) -> Cap {
+    let cap = Cap::new_asid_pool_cap(asid >> (ASIDSizeConstants::ASIDLowBits as usize), asid_pool_ptr);
+    write_slot(cnode_cap.get_cap_pptr(), SeL4CapInitThreadASIDPool as usize, cap);
+    cap
+}
+
+pub fn create_asid_control_cap(cnode_cap: Cap) -> Cap {
+    let cap = Cap::new_asid_control_cap();
+    write_slot(cnode_cap.get_cap_pptr(), SeL4CapASIDControl as usize, cap);
+    cap
+}
 
 pub fn write_slot(cnode_ptr: Pptr, index: usize, cap: Cap) {
     let cnode = unsafe {

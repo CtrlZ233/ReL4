@@ -1,8 +1,8 @@
 mod page_table;
-mod region;
-
+mod asid;
 use log::debug;
 pub use page_table::PageTableEntry;
+pub use asid::ASIDPool;
 
 use riscv::register::satp;
 use riscv::asm::sfence_vma_all;

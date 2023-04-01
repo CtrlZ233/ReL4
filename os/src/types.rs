@@ -1,9 +1,10 @@
-use crate::config::PPTR_BASE_OFFSET;
+use crate::config::{PPTR_BASE_OFFSET, NUM_ASID_POOL_BITS, ASID_POOL_INDEX_BITS};
 
 pub type Pptr = usize;
 pub type Vptr = usize;
 pub type Paddr = usize;
 pub type Cptr = usize;
+pub type Prio = usize;
 
 pub type SlotPos = usize;
 
@@ -11,11 +12,19 @@ pub type Dom = usize;
 
 pub type NodeId = usize;
 
+pub type PTEPtr = Pptr;
+pub type APPtr = Pptr;
+
 pub enum VmRights {
     VMKernelOnly = 1,
     VMReadOnly = 2,
     VMReadWrite = 3
 }
+
+pub enum ASIDSizeConstants {
+    ASIDHighBits = NUM_ASID_POOL_BITS as isize,
+    ASIDLowBits = ASID_POOL_INDEX_BITS as isize,
+} 
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Region {

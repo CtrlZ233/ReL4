@@ -57,3 +57,16 @@ pub fn clz32(i: u32) -> usize
     }
     return ret;
 }
+
+#[inline]
+pub fn hart_id() -> usize {
+    0
+}
+
+#[inline]
+pub fn sign_extend(ret: usize, sign: usize) -> usize {
+    if ret & (1 << 38) != 0 {
+        return ret | sign;
+    }
+    ret
+}

@@ -1,6 +1,6 @@
 use crate::types::{Pptr, Vptr};
-use crate::utils::bool2usize;
-
+use crate::utils::{bool2usize, sign_extend};
+use log::debug;
 #[derive(Clone, Copy)]
 pub struct Cap {
     words: [usize; 2],
@@ -43,21 +43,22 @@ impl Cap {
 
     pub fn get_cap_pptr(&self) -> Pptr {
         match self.get_cap_type() {
-            CapTag::CapUntypedCap => cap_ptr_sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000),
-            CapTag::CapCNodeCap => cap_ptr_sign_extend((self.words[0] & 0x3fffffffff) << 1, 0xffffff8000000000),
-            CapTag::CapPageTableCap => cap_ptr_sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000),
+            CapTag::CapUntypedCap => sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000),
+            CapTag::CapCNodeCap => sign_extend((self.words[0] & 0x3fffffffff) << 1, 0xffffff8000000000),
+            CapTag::CapPageTableCap => sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000),
+            CapTag::CapASIDPoolCap => sign_extend((self.words[0] & 0x1fffffffff) << 2, 0xffffff8000000000),
             _ => 0
         }
     }
 
     pub fn get_pt_mapped_addr(&self) -> Vptr {
         assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
-        cap_ptr_sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
+        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
     }
 
     pub fn get_frame_mapped_addr(&self) -> Vptr {
         assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        cap_ptr_sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
+        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
     }
 
     pub fn new_cnode_cap(cap_cnode_radix: usize, cap_cnode_guard_size: usize,
@@ -110,13 +111,23 @@ impl Cap {
             | (cap_frame_base_ptr & 0x7fffffffff) << 9;
         cap
     }
-}
 
-fn cap_ptr_sign_extend(ret: usize, sign: usize) -> usize {
-    if ret & (1 << 38) != 0 {
-        return ret | sign;
+    pub fn new_asid_pool_cap(cap_asid_base: usize, cap_asid_pool: usize) -> Self {
+        let mut cap: Cap = Cap { words: [0, 0] };
+        cap.words[0] = 0
+            | (CapTag::CapASIDPoolCap as usize & 0x1f) << 59
+            | (cap_asid_base & 0xffff) << 43
+            | (cap_asid_pool & 0x7ffffffffc) >> 2;
+        cap
     }
-    ret
+
+    pub fn new_asid_control_cap() -> Self {
+        let mut cap: Cap = Cap { words: [0, 0] };
+        cap.words[0] = 0
+            | (CapTag::CapASIDControlCap as usize & 0x1f) << 59;
+
+        cap
+    }
 }
 
 impl MDBNode {

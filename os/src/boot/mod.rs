@@ -3,7 +3,7 @@ mod ndks_boot;
 mod boot_info;
 
 use crate::config::{NUM_RESERVED_REGIONS, MAX_NUM_FREEMEM_REG, AVAIL_PHY_MEM_START, AVAIL_PHY_MEM_END, AVAIL_MEM_DEVICE};
-use crate::types::{Region, PhyRegion, VirtRegion};
+use crate::types::{Region, PhyRegion, VirtRegion, APPtr, ASIDSizeConstants};
 use lazy_static::*;
 use spin::Mutex;
 use ndks_boot::NdksBoot;
@@ -21,6 +21,8 @@ lazy_static!{
     static ref AVAIL_P_REGS: Mutex<[PhyRegion; AVAIL_MEM_DEVICE]> = Mutex::new([PhyRegion{start: AVAIL_PHY_MEM_START, end: AVAIL_PHY_MEM_END}; AVAIL_MEM_DEVICE]);
 
     static ref AVAIL_REG: Mutex<[Region; MAX_NUM_FREEMEM_REG]> = Mutex::new([Region::default(); MAX_NUM_FREEMEM_REG]);
+
+    static ref KS_ASID_TABLE: Mutex<[APPtr; 1 << (ASIDSizeConstants::ASIDHighBits as usize)]> = Mutex::new([0; 1 << (ASIDSizeConstants::ASIDHighBits as usize)]);
 }
 
 
@@ -29,9 +31,10 @@ fn boot_mem_init(ui_reg: Region) {
 }
 
 fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize, ipc_buf_vptr: Vptr, extra_bi_size: usize,
-                    extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr) {
+                    extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr, ui_reg: Region,
+                    ui_vp_offset: isize) {
     crate::root_server::init(it_v_reg, extra_bi_size_bits, ipc_buf_vptr, extra_bi_size, extra_bi_offset,
-                             bi_frame_vptr, extra_bi_frame_vptr);
+                             bi_frame_vptr, extra_bi_frame_vptr, ui_reg, ui_vp_offset);
 }
 
 pub fn init() {
@@ -61,6 +64,6 @@ pub fn init() {
 
     boot_mem_init(ui_reg);
     root_server_init(it_v_reg, extra_bi_size_bits, ipc_buf_vptr, extra_bi_size, extra_bi_offset,
-                     bi_frame_vptr, extra_bi_frame_vptr);
+                     bi_frame_vptr, extra_bi_frame_vptr, ui_reg, UI_PV_OFFSET as isize);
 }
 

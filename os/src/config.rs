@@ -30,10 +30,14 @@ pub const MAX_NUM_RESV_REG: usize = NUM_RESERVED_REGIONS + MAX_NUM_FREEMEM_REG;
 pub const SEL4_SLOT_BITS: usize = 5;
 pub const SEL4_VSPACE_BITS: usize = PAGE_BITS;
 pub const SEL4_TCB_BITS: usize = 10;
+pub const SEL4_TCB_SIZE_BITS: usize = SEL4_TCB_BITS - 1;
 pub const SEL4_PAGE_BITS: usize = 12;
 pub const BI_FRAME_SIZE_BITS: usize = PAGE_BITS;
 pub const SEL4_ASID_POOL_BITS: usize = 12;
 pub const SEL4_WORD_BITS: usize = 64;
+
+pub const SEL4_IDLE_TCB_SLOT_SIZE: usize = 1 << SEL4_TCB_BITS;
+pub const TCB_OFFSET: usize = 1 << SEL4_TCB_SIZE_BITS;
 
 pub const SEL4_MSG_MAX_LEN: usize = 120;
 pub const SEL4_MSG_EXTRA_CAP_BITS: usize = 2;
@@ -41,6 +45,7 @@ pub const SEL4_MSG_MAX_EXTRA_CAPS: usize = (1 << SEL4_MSG_EXTRA_CAP_BITS) - 1;
 
 pub const CONFIG_ROOT_CNODE_SIZE_BITS: usize = 13;
 pub const CONFIG_MAX_NUM_NODES: usize = 1;
+pub const CONFIG_KERNEL_STACK_BITS: usize = 12;
 // root server image
 pub const UI_P_REG_START: usize = 0x84020000;
 pub const UI_P_REG_END: usize = 0x84427000;
@@ -52,6 +57,12 @@ pub const IT_ASID: usize = 1;
 
 // schedule
 pub const KS_DOM_SCHEDULE_LENGTH: usize = 1;
+
+pub const NUM_ASID_POOL_BITS: usize = 7;
+pub const ASID_POOL_INDEX_BITS: usize = 9;
+
+pub const CPU_NUM: usize = 1;
+pub const CONTEXT_REGISTERS_NUM: usize = 35;
 
 
 

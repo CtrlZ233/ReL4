@@ -28,6 +28,11 @@ SECTIONS
     }
 
     . = ALIGN(4K);
+    .kernel : AT(ADDR(.kernel) - OFFSET) {
+        *(.kernel.idle_thread)
+    }
+
+    . = ALIGN(4K);
     sbss_with_stack = .;
     .bss : AT(ADDR(.bss) - OFFSET) {
         *(.bss.root_pagetable)
@@ -37,8 +42,8 @@ SECTIONS
         *(.sbss .bss .bss.*)
         ebss = .;
     }
-
     . = ALIGN(4K);
+
     kernel_end = .;
     PROVIDE(end = .);
 }
