@@ -110,7 +110,6 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
         let asid_pool =  &mut *(it_ap_cap.get_cap_pptr() as *mut ASIDPool);
         asid_pool.write(IT_ASID, it_vspace_cap.get_cap_pptr());
     }
-    debug!("create_idle_thread begin");
 
     create_idle_thread();
 
