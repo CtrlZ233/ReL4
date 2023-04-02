@@ -99,6 +99,7 @@ fn reserve_region(reg: PhyRegion, ndks_boot: &mut MutexGuard<NdksBoot>) {
     }
 
     while i < ndks_boot.resv_count {
+
         if ndks_boot.reserved[i].start == reg.end {
             ndks_boot.reserved[i].start = reg.start;
             merge_regions(ndks_boot);
@@ -131,7 +132,7 @@ fn reserve_region(reg: PhyRegion, ndks_boot: &mut MutexGuard<NdksBoot>) {
     }
     if i + 1 == MAX_NUM_RESV_REG {
         error!("[reserve_region]error!");
-        assert!(1 == 0);
+        assert_eq!(1, 0);
     }
 
     ndks_boot.reserved[i] = reg;

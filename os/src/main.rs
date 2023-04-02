@@ -32,6 +32,7 @@ mod types;
 mod cspace;
 mod scheduler;
 mod ipc;
+mod untyped;
 
 
 global_asm!(include_str!("entry.asm"));

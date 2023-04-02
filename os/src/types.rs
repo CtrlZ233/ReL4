@@ -59,7 +59,7 @@ impl PhyRegion {
     pub fn pptr_to_paddr_reg(reg: Region) -> Self {
         PhyRegion {
             start: reg.start - PPTR_BASE_OFFSET,
-            end: reg.start - PPTR_BASE_OFFSET,
+            end: reg.end - PPTR_BASE_OFFSET,
         }
     }
 }

@@ -7,11 +7,11 @@ use log::{debug, error};
 use spin::Mutex;
 use crate::{config::{CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS}, utils::bit, cspace::{create_asid_pool_cap, create_asid_control_cap}, mm::ASIDPool};
 use crate::boot::{BootInfo, BootInfoHeader, BootInfoID, NDKS_BOOT};
-use crate::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE};
+use crate::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE, UI_V_ENTRY};
 use crate::cspace::{Cap, CapTag, CNodeSlot, create_bi_frame_cap, create_domain_cap, create_frame_cap, create_it_pt_cap, create_page_table_cap, create_root_cnode};
 use crate::cspace::CNodeSlot::SeL4CapInitThreadIpcBuffer;
 use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry};
-use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX, create_idle_thread};
+use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX, create_idle_thread, create_initial_thread, init_core_state};
 use crate::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
 use crate::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down};
 
@@ -24,13 +24,21 @@ lazy_static! {
 
 pub fn init(it_v_reg: VirtRegion, extra_bi_size_bits: usize, ipc_buf_vptr: Vptr, extra_bi_size: usize,
             extra_bi_offset: usize, bi_frame_vptr: Vptr, extra_bi_frame_vptr: Vptr, ui_reg: Region,
-            ui_vp_offset: isize) {
+            ui_vp_offset: isize) -> Cap {
     root_server_init(it_v_reg, extra_bi_size_bits);
     populate_bi_frame(0, CONFIG_MAX_NUM_NODES, ipc_buf_vptr, extra_bi_size_bits, extra_bi_size);
 
     init_boot_info_header(extra_bi_size, extra_bi_offset);
 
-    create_all_caps(it_v_reg, bi_frame_vptr, extra_bi_size, extra_bi_frame_vptr, ipc_buf_vptr, ui_reg, ui_vp_offset);
+    let (root_cnode_cap, it_vspace_cap, ipc_buf_cap) =  create_all_caps(it_v_reg, bi_frame_vptr,
+                                                                        extra_bi_size, extra_bi_frame_vptr,
+                                                                        ipc_buf_vptr, ui_reg, ui_vp_offset);
+    create_idle_thread();
+    let tcb = create_initial_thread(root_cnode_cap, it_vspace_cap, UI_V_ENTRY,
+                                    bi_frame_vptr, ipc_buf_vptr, ipc_buf_cap);
+
+    init_core_state(tcb);
+    root_cnode_cap
 }
 
 pub fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
@@ -73,7 +81,7 @@ pub fn root_server_init(it_v_reg: VirtRegion, extra_bi_size_bits: usize) {
 
 fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usize,
                    extra_bi_frame_vptr: Vptr,ipc_buf_vptr: Vptr, ui_reg: Region,
-                   ui_vp_offset: isize) {
+                   ui_vp_offset: isize) -> (Cap, Cap, Cap) {
     let root_cnode_cap = create_root_cnode();
     if root_cnode_cap.get_cap_type() == CapTag::CapNullCap {
         error!("root c-node creation failed");
@@ -110,9 +118,7 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
         let asid_pool =  &mut *(it_ap_cap.get_cap_pptr() as *mut ASIDPool);
         asid_pool.write(IT_ASID, it_vspace_cap.get_cap_pptr());
     }
-
-    create_idle_thread();
-
+    (root_cnode_cap, it_vspace_cap, ipc_buf_cap)
 }
 
 fn maybe_create_extra_bi_frame_cap(root_cnode_cap: Cap, vspace_cap: Cap, extra_bi_size: usize,

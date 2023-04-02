@@ -57,13 +57,18 @@ pub const IT_ASID: usize = 1;
 
 // schedule
 pub const KS_DOM_SCHEDULE_LENGTH: usize = 1;
-
+pub const CONFIG_NUM_PRIORITIES: usize = 256;
 pub const NUM_ASID_POOL_BITS: usize = 7;
 pub const ASID_POOL_INDEX_BITS: usize = 9;
 
 pub const CPU_NUM: usize = 1;
 pub const CONTEXT_REGISTERS_NUM: usize = 35;
 
+pub const MIN_UNTYPED_BITS: usize = 4;
+pub const MAX_UNTYPED_BITS: usize = 38;
+pub const WORD_BITS: usize = 64;
+pub const CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS: usize = 230;
 
+pub const CONFIG_PADDR_USER_DEVICE_TOP: usize = 0x800000_0000;
 
 

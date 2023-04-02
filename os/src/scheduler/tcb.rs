@@ -3,26 +3,30 @@ use core::ops::{Index, IndexMut};
 use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD};
 
 use log::{error, debug};
+use crate::config::SEL4_TCB_BITS;
+use crate::cspace::{Cap, CapTableEntry, CapTag, MDBNode};
+use crate::cspace::TCBCNodeIndex::TCBReply;
+use crate::scheduler::register::Register::{NextIP, SSTATUS};
 
 #[derive(Default)]
 pub struct TCB {
     context: RiscvContext,
     tcb_state: ThreadState,
-    tcb_bound_notification: Pptr,
+    pub tcb_bound_notification: Pptr,
     tcb_fault: Fault,
     lookup_fault: LookUpFault,
-    tcb_domain: Dom,
-    tcb_mcp: Prio,
-    tcb_priority: Prio,
-    tcb_time_slice: usize,
-    tcb_fault_handler: Cptr,
-    tcb_ipc_buffer: Vptr,
+    pub tcb_domain: Dom,
+    pub tcb_mcp: Prio,
+    pub tcb_priority: Prio,
+    pub tcb_time_slice: usize,
+    pub tcb_fault_handler: Cptr,
+    pub tcb_ipc_buffer: Vptr,
 
-    tcb_sched_next: Pptr,
-    tcb_sched_prev: Pptr,
+    pub tcb_sched_next: Pptr,
+    pub tcb_sched_prev: Pptr,
 
-    tcb_ep_next: Pptr,
-    tcb_ep_prev: Pptr,
+    pub tcb_ep_next: Pptr,
+    pub tcb_ep_prev: Pptr,
 }
 
 impl TCB {
@@ -72,8 +76,34 @@ impl TCB {
         }   
     }
 
+    pub fn get_cnode_ptr_of_this(&self) -> Pptr {
+        let self_ptr = self as *const TCB as Pptr;
+        self_ptr & !(1 << SEL4_TCB_BITS)
+    }
+
     pub fn set_register(&mut self, reg: usize, w: usize) {
         self.context.registers[reg] = w;
+    }
+
+    pub fn set_next_pc(&mut self, entry: usize) {
+        self.context.registers[NextIP as usize] = entry;
+    }
+
+    pub fn setup_replay_master(&mut self) {
+        let cnode = unsafe {
+            &mut *(self.get_cnode_ptr_of_this() as *mut TCBCNode)
+        };
+        let slot = &mut cnode[TCBReply as usize];
+        if slot.cap.get_cap_type() == CapTag::CapNullCap {
+            slot.cap = Cap::new_reply_cap(true, true, self as *const TCB as Pptr);
+            slot.mdb_node = MDBNode::null_mdbnode();
+            slot.mdb_node.set_mdb_revocable(true);
+            slot.mdb_node.set_mdb_first_badged(true);
+        }
+    }
+
+    pub fn init_context(&mut self) {
+        self.context.registers[SSTATUS as usize] = SSTATUS_SPIE;
     }
 }
 
@@ -138,6 +168,8 @@ struct Fault {
 struct LookUpFault {
     words: Array<usize, 2>,
 }
+
+pub type TCBCNode = [CapTableEntry; 16];
 
 pub enum ThreadStateEnum {
     ThreadStateInactive = 0,

@@ -1,6 +1,7 @@
-use crate::config::{PAGE_BITS, SEL4_WORD_BITS};
+use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, PAGE_BITS, SEL4_WORD_BITS};
 use crate::types::{NodeId, Paddr, Vptr, SlotRegion};
-use crate::utils::{bit, clz32, round_up};
+use crate::untyped::UntypedDesc;
+use crate::utils::{bit, round_up};
 
 #[derive(Copy, Clone)]
 pub struct BootInfoHeader {
@@ -19,13 +20,6 @@ pub enum BootInfoID {
     Sel4BootInfoHeaderNum,
 }
 
-pub struct UntypedDesc {
-    paddr: Paddr,
-    size_bits: u8,
-    is_device: u8,
-    padding: [u8; 8 - 2 * 1],
-}
-
 pub struct BootInfo {
     pub extra_len: usize,
     pub node_id: NodeId,
@@ -41,14 +35,14 @@ pub struct BootInfo {
     pub init_thread_cnode_size_bits: usize,
     pub init_thread_domain: usize,
     pub untyped: SlotRegion,
-    pub untyped_list: UntypedDesc
+    pub untyped_list: [UntypedDesc; CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS],
 }
 
 pub fn calculate_extra_bi_size_bits(extra_size: usize) -> usize {
     if extra_size == 0 {
         return 0;
     }
-    let clzl_ret = clz32(round_up(extra_size, PAGE_BITS) as u32) + 32;
+    let clzl_ret = round_up(extra_size, PAGE_BITS).leading_zeros() as usize;
     // debug!("extra_size: {}, clzl_ret: {}", round_up(extra_size, PAGE_BITS), clzl_ret);
     let mut msb = SEL4_WORD_BITS - 1 - clzl_ret;
     if extra_size > bit(msb) {

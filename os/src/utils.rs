@@ -45,19 +45,6 @@ pub fn bool2usize(flag: bool) -> usize {
     if flag { 1 } else { 0 }
 }
 
-pub fn clz32(i: u32) -> usize
-{
-    let mut ret = 0;
-
-    let mut temp = !i;
-
-    while temp & 0x80000000 != 0 {
-        temp <<= 1;
-        ret += 1;
-    }
-    return ret;
-}
-
 #[inline]
 pub fn hart_id() -> usize {
     0
