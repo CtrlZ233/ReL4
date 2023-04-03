@@ -34,6 +34,7 @@ mod scheduler;
 mod ipc;
 mod untyped;
 mod trap;
+mod syscall;
 
 
 global_asm!(include_str!("entry.asm"));

@@ -82,6 +82,10 @@ impl TCB {
         self_ptr & !(mask(SEL4_TCB_BITS))
     }
 
+    pub fn get_register(&self, index: usize) -> usize {
+        self.context.registers[index]
+    }
+
     pub fn get_context_base_ptr(&self) -> Pptr {
         &(self.context) as *const RiscvContext as usize
     }

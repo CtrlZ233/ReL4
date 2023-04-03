@@ -7,13 +7,13 @@ extern crate root_server;
 
 use core::arch::asm;
 use root_server::*;
+use syscall::println;
+
 
 #[no_mangle]
 pub fn main() -> i32 {
-    unsafe {
-        asm!(
-        "add a1, a1, a2"
-        );
-    }
+    println!("hello root server!");
+    println!("===============");
+    
     0
 }

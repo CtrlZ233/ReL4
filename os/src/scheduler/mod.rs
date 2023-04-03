@@ -7,12 +7,12 @@ use core::sync::atomic::AtomicUsize;
 use lazy_static::*;
 use log::{debug, error};
 use core::arch::asm;
-use core::ops::IndexMut;
 use core::sync::atomic::Ordering::SeqCst;
 use spin::Mutex;
 use domain_schedule::DomainScheduler;
 
 pub use tcb::{TCB, IdleTCB};
+pub use register::*;
 
 use crate::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS}, types::Pptr};
 use crate::config::PPTR_BASE_OFFSET;
@@ -23,7 +23,6 @@ use crate::cspace::TCBCNodeIndex::TCBVTable;
 use crate::mm::set_vspace_root;
 use crate::root_server::ROOT_SERVER;
 use crate::scheduler::domain_schedule::{KS_CUR_DOMAIN, KS_DOMAIN_TIME, PriorityConst};
-use crate::scheduler::register::CAP_REGISTER;
 use crate::scheduler::tcb::TCBCNode;
 use crate::scheduler::tcb::ThreadStateEnum::ThreadStateRunning;
 use crate::types::Vptr;
@@ -175,5 +174,17 @@ pub fn switch_to_thread(tcb: &mut TCB) {
     // TODO: dequeue current tcb
     unsafe {
         KS_CUR_THREAD[hart_id()] = tcb as *const TCB as usize;
+    }
+}
+
+pub fn get_current_tcb() -> &'static TCB {
+    unsafe {
+        &*(KS_CUR_THREAD[hart_id()] as *const TCB)
+    }
+}
+
+pub fn get_current_mut_tcb() -> &'static mut TCB {
+    unsafe {
+        &mut *(KS_CUR_THREAD[hart_id()] as *mut TCB)
     }
 }

@@ -4,12 +4,12 @@
 #![feature(alloc_error_handler)]
 
 use core::arch::{asm, global_asm};
-use crate::config::USER_STACK_SIZE;
+
+#[macro_use]
+extern crate syscall;
 
 mod config;
 mod lang_item;
-
-static USER_STACK: [u8; USER_STACK_SIZE] = [0; USER_STACK_SIZE];
 
 global_asm!(include_str!("entry.asm"));
 
