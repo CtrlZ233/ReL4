@@ -87,6 +87,7 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
         error!("root c-node creation failed");
         assert_eq!(1, 0);
     }
+    debug!("it_v_reg: {:#x} ... {:#x}", it_v_reg.start, it_v_reg.end);
     create_domain_cap(root_cnode_cap);
     let it_vspace_cap = create_it_address_space(root_cnode_cap, it_v_reg).unwrap();
 
@@ -135,8 +136,10 @@ fn maybe_create_extra_bi_frame_cap(root_cnode_cap: Cap, vspace_cap: Cap, extra_b
 
 fn create_frame_caps_of_region(root_cnode_cap: Cap,vspace_cap: Cap, reg: Region, pv_offset: isize, asid: usize) -> SlotRegion {
     let slot_before = NDKS_BOOT.lock().slot_pos_cur;
+    debug!("[create_frame_caps_of_region] reg: {:#x} ... {:#x}", (reg.start - PPTR_BASE) as isize - pv_offset, (reg.end - PPTR_BASE) as isize - pv_offset);
     let mut start = reg.start;
     while start < reg.end {
+
         let frame_cap = create_frame_cap(root_cnode_cap, ((start - PPTR_BASE) as isize - pv_offset) as usize,
                                             start, NDKS_BOOT.lock().slot_pos_cur, asid);
         NDKS_BOOT.lock().slot_pos_cur += 1;

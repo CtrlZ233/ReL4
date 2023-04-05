@@ -47,10 +47,10 @@ pub const CONFIG_ROOT_CNODE_SIZE_BITS: usize = 13;
 pub const CONFIG_MAX_NUM_NODES: usize = 1;
 pub const CONFIG_KERNEL_STACK_BITS: usize = 12;
 // root server image
-pub const UI_P_REG_START: usize = 0x84020000;
-pub const UI_P_REG_END: usize = 0x84427000;
-pub const UI_PV_OFFSET: usize = 0x84010000;
-pub const UI_V_ENTRY: usize = 0x1b932;
+pub const UI_P_REG_START: usize = 0x82000000;
+pub const UI_P_REG_END: usize = 0x82400000;
+pub const UI_PV_OFFSET: usize = 0x81FFF000;
+pub const UI_V_ENTRY: usize = 0x1000;
 pub const USER_TOP: usize = 0x0000003FFFFFF000;
 
 pub const IT_ASID: usize = 1;
@@ -71,4 +71,5 @@ pub const CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS: usize = 230;
 
 pub const CONFIG_PADDR_USER_DEVICE_TOP: usize = 0x800000_0000;
 
+pub const CONFIG_NUM_DOMAINS: usize = 1;
 

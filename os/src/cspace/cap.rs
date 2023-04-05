@@ -51,6 +51,8 @@ impl Cap {
             CapTag::CapCNodeCap => sign_extend((self.words[0] & 0x3fffffffff) << 1, 0xffffff8000000000),
             CapTag::CapPageTableCap => sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000),
             CapTag::CapASIDPoolCap => sign_extend((self.words[0] & 0x1fffffffff) << 2, 0xffffff8000000000),
+            CapTag::CapThreadCap => sign_extend(self.words[0] & & 0x7fffffffff, 0xffffff8000000000),
+            CapTag::CapFrameCap => self.get_frame_base_ptr(),
             _ => 0
         }
     }
@@ -60,9 +62,24 @@ impl Cap {
         sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
     }
 
+    pub fn get_pt_mapped_asid(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
+        sign_extend((self.words[1] & 0xffff000000000000) >> 48, 0x0)
+    }
+
+    pub fn get_pt_based_ptr(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
+        sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000)
+    }
+
     pub fn get_frame_mapped_addr(&self) -> Vptr {
         assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
         sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
+    }
+
+    pub fn get_frame_base_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
+        sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000)
     }
 
     pub fn get_ep_badge(&self) -> usize {

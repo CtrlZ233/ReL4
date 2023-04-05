@@ -33,6 +33,7 @@ mod cspace;
 mod scheduler;
 mod ipc;
 mod untyped;
+mod trap;
 
 
 global_asm!(include_str!("entry.asm"));
@@ -60,6 +61,7 @@ pub fn rust_main() -> ! {
         fn ebss(); // end addr of BSS segment
         fn boot_stack_lower_bound(); // stack lower bound
         fn boot_stack_top(); // stack top
+        fn kernel_end();
     }
 
     clear_bss();
@@ -86,6 +88,10 @@ pub fn rust_main() -> ! {
     );
     error!("[kernel] .bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
 
+    trap::init();
+    debug!("kernel_end: {:#x}", kernel_end as usize);
+    scheduler::schedule();
+    trap::restore_user_context();
     // CI autotest success: sbi::shutdown(false)
     // CI autotest failed : sbi::shutdown(true)
     sbi::shutdown(false)

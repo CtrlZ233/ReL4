@@ -12,6 +12,7 @@ pub use cap::{Cap, CapTag, CapTableEntry, MDBNode};
 pub use cnode::{CNode, CNodeSlot, TCBCNodeIndex};
 use crate::boot::NDKS_BOOT;
 use crate::cspace::cap::{is_cap_revocable};
+use crate::cspace::CapTag::CapPageTableCap;
 use crate::cspace::CNodeSlot::SeL4CapInitThreadTcb;
 use crate::untyped::set_untyped_cap_as_full;
 use crate::utils::bit;

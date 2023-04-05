@@ -7,6 +7,7 @@ use crate::config::SEL4_TCB_BITS;
 use crate::cspace::{Cap, CapTableEntry, CapTag, MDBNode};
 use crate::cspace::TCBCNodeIndex::TCBReply;
 use crate::scheduler::register::Register::{NextIP, SSTATUS};
+use crate::utils::mask;
 
 #[derive(Default)]
 pub struct TCB {
@@ -78,7 +79,11 @@ impl TCB {
 
     pub fn get_cnode_ptr_of_this(&self) -> Pptr {
         let self_ptr = self as *const TCB as Pptr;
-        self_ptr & !(1 << SEL4_TCB_BITS)
+        self_ptr & !(mask(SEL4_TCB_BITS))
+    }
+
+    pub fn get_context_base_ptr(&self) -> Pptr {
+        &(self.context) as *const RiscvContext as usize
     }
 
     pub fn set_register(&mut self, reg: usize, w: usize) {
@@ -149,7 +154,7 @@ struct ThreadState {
 impl ThreadState {
     pub fn set(&mut self, ts: usize) {
         self.words[0] &= !0xf;
-        self.words[1] |= (ts << 0) &0xf;
+        self.words[0] |= (ts << 0) &0xf;
 
     }
 }

@@ -7,7 +7,7 @@ pub use asid::ASIDPool;
 use riscv::register::satp;
 use riscv::asm::sfence_vma_all;
 use spin::Mutex;
-use crate::types::VirtRegion;
+use crate::types::{Paddr, VirtRegion};
 
 use crate::utils::*;
 
@@ -83,8 +83,12 @@ pub fn activate_kernel_vspace() {
         &mut KERNEL_ROOT_PAGE_TABLE as *mut [u64; ROOT_PAGE_TABLE_SIZE] as usize - PV_BASE_OFFSET
     };
     debug!("root_page_table_paddr: {:#x}", root_page_table_paddr);
+    set_vspace_root(root_page_table_paddr, 0);
+}
+
+pub fn set_vspace_root(paddr: Paddr, asid: usize) {
     unsafe {
-        satp::set(satp::Mode::Sv39, 0, root_page_table_paddr >> PAGE_BITS);
+        satp::set(satp::Mode::Sv39, asid, paddr >> PAGE_BITS);
         sfence_vma_all();
     }
 }
@@ -104,7 +108,7 @@ pub fn copy_global_mappings(newLvl1pt: &mut [PageTableEntry; ROOT_PAGE_TABLE_SIZ
     let _lock = KERNEL_VSPACE_LOCK.lock();
     let mut i = get_pt_index(PPTR_BASE, 0);
     let global_kernel_vspace = unsafe {
-        & mut *(&mut KERNEL_IMAGE_LEVEL2_PT as *mut [u64; ROOT_PAGE_TABLE_SIZE] as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
+        & mut *(&mut KERNEL_ROOT_PAGE_TABLE as *mut [u64; ROOT_PAGE_TABLE_SIZE] as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
     };
 
     while i < bit(PAGE_TABLE_INDEX_BITS) {
@@ -137,7 +141,7 @@ pub fn map_frame_cap(vspace_cap: Cap, cap: Cap) {
     };
     let frame_pptr = cap.get_cap_pptr();
     let frame_vptr = cap.get_frame_mapped_addr();
-
+    // debug!("frame_pptr: {:#x}, frame_vptr: {:#x}", frame_pptr, frame_vptr);
     let (pt_bits_left, pte_pptr) = look_up_pt_slot(lvl1pt, frame_vptr);
     assert_eq!(pt_bits_left, PAGE_BITS);
     let target_slot = unsafe {
