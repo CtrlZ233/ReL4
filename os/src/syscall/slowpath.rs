@@ -1,5 +1,5 @@
 
-use super::SYS_PUT_CHAR;
+use super::{SYS_PUT_CHAR, SYS_CALL};
 use crate::sbi;
 use crate::scheduler::get_current_tcb;
 use crate::scheduler::CAP_REGISTER;
@@ -9,6 +9,9 @@ pub fn slowpath(syscall: usize) {
     match syscall {
         SYS_PUT_CHAR => {
             sbi::console_putchar(get_current_tcb().get_register(CAP_REGISTER));
+        }
+        SYS_CALL => {
+
         }
         _ => {
             error!("unknown syscall");

@@ -6,7 +6,7 @@
 use core::arch::{asm, global_asm};
 
 #[macro_use]
-extern crate syscall;
+extern crate user_lib;
 
 mod config;
 mod lang_item;

@@ -1,5 +1,5 @@
 use core::fmt::{self, Write};
-use super::syscall::sys_put_char;
+use syscall::sys_put_char;
 struct Stdout;
 
 impl Write for Stdout {
