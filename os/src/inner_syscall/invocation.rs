@@ -1,7 +1,8 @@
-use log::error;
+use log::{error, debug};
 use syscall::{InvocationLabel, MessageInfo};
 use crate::config::SEL4_MSG_MAX_LEN;
 use crate::cspace::{Cap, CapTableEntry, CapTag};
+use crate::sbi::shutdown;
 use crate::scheduler::{CAP_REGISTER, KS_CUR_THREAD, MSG_INFO_REGISTER, TCB};
 use crate::scheduler::ThreadStateEnum::ThreadStateRestart;
 use crate::types::Pptr;
@@ -14,6 +15,7 @@ pub fn handle_invocation(is_call: bool , is_blocking: bool) {
 
     let info = MessageInfo::from_word(thread.get_register(MSG_INFO_REGISTER));
     let cptr = thread.get_register(CAP_REGISTER);
+    debug!("cptr: {}", cptr);
     match thread.lookup_cap_and_slot(cptr) {
         Some((cap, slot)) => {
             let buffer = thread.lookup_ipc_buffer(false).unwrap();
@@ -26,6 +28,8 @@ pub fn handle_invocation(is_call: bool , is_blocking: bool) {
         _ => {
             error!("[handle_invocation] look up slot failed!");
             if is_blocking {
+                error!("need to handle fault");
+                shutdown(true);
                 // TODO: handle fault
             }
         }
@@ -48,6 +52,7 @@ pub fn decode_tcb_invocation(inv_label: usize, length: usize, cap: Cap, slot: *m
                              call: bool, buffer: Pptr) {
     match InvocationLabel::from_usize(inv_label) {
         InvocationLabel::TCBSuspend => {
+            debug!("Suspend TCB");
             let tcb = unsafe {
                 &mut *(KS_CUR_THREAD[hart_id()] as *mut TCB)
             };
@@ -55,6 +60,7 @@ pub fn decode_tcb_invocation(inv_label: usize, length: usize, cap: Cap, slot: *m
             let dest_tcb = unsafe {
                 &mut *(cap.get_tcb_ptr() as *mut TCB)
             };
+            // debug!("dest_tcb: {:#x}, cur_tcb: {:#x}", tcb as *mut TCB as usize, dest_tcb as *mut TCB as usize);
             dest_tcb.suspend();
         }
         _ => {

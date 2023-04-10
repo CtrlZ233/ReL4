@@ -1,4 +1,5 @@
-use crate::inner_syscall::invocation::handle_invocation;
+use crate::{inner_syscall::invocation::handle_invocation, scheduler::{schedule, activate_thread}};
+use log::debug;
 use syscall::SYS_CALL;
 pub fn handle_syscall(syscall: isize) {
     match syscall {
@@ -9,4 +10,7 @@ pub fn handle_syscall(syscall: isize) {
 
         }
     }
+    schedule();
+    activate_thread();
+    
 }

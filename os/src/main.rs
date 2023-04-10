@@ -94,6 +94,7 @@ pub fn rust_main() -> ! {
     trap::init();
     debug!("kernel_end: {:#x}", kernel_end as usize);
     scheduler::schedule();
+    scheduler::activate_thread();
     trap::restore_user_context();
     // CI autotest success: sbi::shutdown(false)
     // CI autotest failed : sbi::shutdown(true)

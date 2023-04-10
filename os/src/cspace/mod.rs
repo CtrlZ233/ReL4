@@ -1,5 +1,5 @@
 use log::{debug, error};
-use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, CONFIG_ROOT_CNODE_SIZE_BITS, GUARD_BITS, IT_ASID, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, SEL4_WORD_BITS, WORD_BITS};
+use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, CONFIG_ROOT_CNODE_SIZE_BITS, GUARD_BITS, IT_ASID, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, SEL4_WORD_BITS, WORD_BITS, WORD_RADIX};
 use crate::cspace::cnode::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
 use crate::root_server::ROOT_SERVER;
 use crate::types::{ASIDSizeConstants, Region, SlotPos};
@@ -131,6 +131,7 @@ pub fn cte_insert(new_cap: Cap, src_slot: &mut CapTableEntry, dest_slot: &mut Ca
 
 pub fn resolve_address_bits(node_cap: Cap, cap_ptr: usize, n_bits: usize) -> Option<*mut CapTableEntry> {
     if node_cap.get_cap_type() != CapCNodeCap {
+        debug!("cptr: {}, type: {:?}", cap_ptr, node_cap.get_cap_type());
         return None;
     }
     let mut local_n_bits = n_bits;
@@ -139,12 +140,10 @@ pub fn resolve_address_bits(node_cap: Cap, cap_ptr: usize, n_bits: usize) -> Opt
         let radix_bits = local_node_cap.get_cnode_radix();
         let guard_bits = local_node_cap.get_cnode_guard_size();
         let level_bits = radix_bits + guard_bits;
-
         assert_ne!(level_bits, 0);
 
         let cap_guard = local_node_cap.get_cnode_guard();
-
-        let guard = (cap_ptr >> ((local_n_bits - guard_bits) & mask(GUARD_BITS))) & mask(GUARD_BITS);
+        let guard = (cap_ptr >> ((local_n_bits - guard_bits) & mask(WORD_RADIX))) & mask(guard_bits);
         if guard_bits > local_n_bits || guard != cap_guard {
             return None;
         }

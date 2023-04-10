@@ -1,6 +1,6 @@
-use crate::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr, Vptr}, utils::{bit, hart_id, sign_extend}};
+use crate::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr, Vptr}, utils::{bit, hart_id, sign_extend, bool2usize}, scheduler::re_schedule};
 use core::ops::{Index, IndexMut};
-use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD};
+use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD, ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap};
 
 use log::{error, debug};
 use crate::config::{SEL4_TCB_BITS, VM_READ_ONLY, VM_READ_WRITE, WORD_BITS};
@@ -15,7 +15,7 @@ use crate::utils::{mask, page_bits_for_size};
 #[derive(Default)]
 pub struct TCB {
     context: RiscvContext,
-    tcb_state: ThreadState,
+    pub tcb_state: ThreadState,
     pub tcb_bound_notification: Pptr,
     tcb_fault: Fault,
     lookup_fault: LookUpFault,
@@ -57,6 +57,7 @@ impl TCB {
             self.update_restart_pc();
         }
         self.set_thread_state(ThreadStateInactive);
+        self.de_queue_from_sched();
     }
 
     pub fn update_restart_pc(&mut self) {
@@ -83,6 +84,7 @@ impl TCB {
 
             }
             _ => {
+                debug!("nothing to do in cancel ipc");
                 // TODO: more state cancel
             }
         }
@@ -90,9 +92,68 @@ impl TCB {
 
     pub fn de_queue_from_sched(&mut self) {
         if self.tcb_state.is_get_tcb_queued() {
+            
             let dom = self.tcb_domain;
             let prio = self.tcb_priority;
+            let idx = ready_queues_index(dom, prio);
+            let mut queue = unsafe {
+                KS_READY_QUEUES[idx]
+            };
 
+            if self.tcb_sched_prev != 0 {
+                let prev = unsafe {
+                    &mut *(self.tcb_sched_prev as *mut TCB)
+                };
+                prev.tcb_sched_next = self.tcb_sched_next;
+            } else {
+                queue.head = self.tcb_sched_next as *mut TCB;
+                if self.tcb_sched_next == 0 {
+                    remove_from_bitmap(hart_id(), dom, prio);
+                }
+            }
+            
+
+            if self.tcb_sched_next != 0 {
+                let next = unsafe {
+                    &mut *(self.tcb_sched_next as *mut TCB)
+                };
+                next.tcb_sched_prev = self.tcb_sched_prev;
+            } else {
+                queue.end = self.tcb_sched_prev as *mut TCB;
+            }
+
+            unsafe {
+                KS_READY_QUEUES[idx] = queue;
+            }
+            self.tcb_state.set_tcb_queued(false);
+        }
+    }
+
+    pub fn enqueue_to_sched(&mut self) {
+        if !self.tcb_state.is_get_tcb_queued() {
+            let dom =  self.tcb_domain;
+            let prio = self.tcb_priority;
+            let idx = ready_queues_index(dom, prio);
+            let mut queue = unsafe {
+                KS_READY_QUEUES[idx]
+            };
+
+            if queue.end as usize == 0 {
+                queue.end = self as *mut TCB;
+                add_to_bitmap(hart_id(), dom, prio);
+            } else {
+                unsafe {
+                    (&mut *(queue.head)).tcb_sched_prev = self as *mut TCB as usize;
+                }
+            }
+
+            self.tcb_sched_prev = 0;
+            self.tcb_sched_next = queue.head as usize;
+            queue.head = self as *mut TCB;
+            unsafe {
+                KS_READY_QUEUES[idx] = queue;
+            }
+            self.tcb_state.set_tcb_queued(true);
         }
     }
 
@@ -102,8 +163,7 @@ impl TCB {
             if self_ptr == KS_CUR_THREAD[hart_id()] &&
                 KS_SCHEDULER_ACTION[hart_id()] == SCHEDULER_ACTION_RESUME_CURRENT_THREAD &&
                 !self.is_schedulable() {
-                    // TODD: re_schedule
-                    error!("todo: re_schedule");
+                    re_schedule();
                 }
         }
     }
@@ -132,6 +192,10 @@ impl TCB {
 
     pub fn get_register(&self, index: usize) -> usize {
         self.context.registers[index]
+    }
+
+    pub fn get_restart_pc(&self) -> usize {
+        self.get_register(FaultIP as usize)
     }
 
     pub fn get_context_base_ptr(&self) -> Pptr {
@@ -167,7 +231,7 @@ impl TCB {
         let thread_root_cap = unsafe {
             (&mut *(self.get_cnode_ptr_of_this() as *mut TCBCNode))[TCBCTable as usize].cap
         };
-        resolve_address_bits(thread_root_cap, cap_ptr, bit(WORD_BITS))
+        resolve_address_bits(thread_root_cap, cap_ptr, WORD_BITS)
     }
 
     pub fn lookup_cap_and_slot(&self, cap_ptr: usize) -> Option<(Cap, *mut CapTableEntry)> {
@@ -244,7 +308,7 @@ struct RiscvContext {
 }
 
 #[derive(Default)]
-struct ThreadState {
+pub struct ThreadState {
     words: Array<usize, 3>,
 }
 
@@ -261,6 +325,12 @@ impl ThreadState {
 
     pub fn is_get_tcb_queued(&self) -> bool {
         sign_extend(self.words[1] & 0x1, 0x0) == 1
+    }
+
+    pub fn set_tcb_queued(&mut self, queued: bool) {
+        
+        self.words[1] &= !0x1;
+        self.words[1] |= bool2usize(queued) & 0x1;
     }
 }
 
@@ -293,6 +363,7 @@ pub enum ThreadStateEnum {
     ThreadStateIdleThreadState = 7,
 }
 
+#[derive(Clone, Copy)]
 pub struct TCBQueue {
     pub head: *mut TCB,
     pub end: *mut TCB,

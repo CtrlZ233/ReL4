@@ -80,3 +80,6 @@ pub const WORD_RADIX: usize = GUARD_BITS;
 pub const VM_KERNEL_ONLY: usize = 1;
 pub const VM_READ_ONLY: usize = 2;
 pub const VM_READ_WRITE: usize = 3;
+
+pub const NUM_READY_QUEUES: usize = CONFIG_NUM_DOMAINS * CONFIG_NUM_PRIORITIES;
+pub const L2_BITMAP_SIZE: usize = (CONFIG_NUM_PRIORITIES + WORD_BITS - 1) / WORD_BITS;

@@ -1,4 +1,4 @@
-use crate::config::{CONFIG_PT_LEVELS, PAGE_TABLE_INDEX_BITS, PAGE_BITS};
+use crate::config::{CONFIG_PT_LEVELS, PAGE_TABLE_INDEX_BITS, PAGE_BITS, WORD_RADIX, L2_BITMAP_SIZE};
 
 #[inline]
 pub fn mask(n: usize) -> usize {
@@ -62,4 +62,21 @@ pub fn sign_extend(ret: usize, sign: usize) -> usize {
 pub fn page_bits_for_size(page_size: usize) -> usize {
     // TODO: different page size
     return PAGE_BITS;
+}
+
+#[inline]
+pub fn prio_2_l1_index(prio: usize) -> usize {
+    prio >> WORD_RADIX
+}
+
+#[inline]
+pub fn l1_index_2_prio(index: usize) -> usize {
+    index << WORD_RADIX
+}
+
+#[inline]
+pub fn invert_l1_index(index: usize) -> usize {
+    let invert = L2_BITMAP_SIZE - 1 - index;
+    assert!(invert < L2_BITMAP_SIZE);
+    invert
 }
