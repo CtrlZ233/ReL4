@@ -1,6 +1,6 @@
 use bitflags::*;
-use crate::config::{PAGE_BITS, PPTR_BASE_OFFSET};
-use crate::types::Pptr;
+use common::config::{PAGE_BITS, PPTR_BASE_OFFSET};
+use common::types::Pptr;
 bitflags! {
     pub struct PTEFlags: u8 {
         const V = 1 << 0;

@@ -5,15 +5,16 @@ use core::sync::atomic::Ordering::SeqCst;
 use lazy_static::*;
 use log::{debug, error};
 use spin::Mutex;
-use crate::{config::{CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS}, utils::bit, cspace::{create_asid_pool_cap, create_asid_control_cap}, mm::ASIDPool};
+use crate::cspace::{create_asid_pool_cap, create_asid_control_cap};
 use crate::boot::{BootInfo, BootInfoHeader, BootInfoID, NDKS_BOOT};
-use crate::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE, UI_V_ENTRY};
-use crate::cspace::{Cap, CapTag, CNodeSlot, create_bi_frame_cap, create_domain_cap, create_frame_cap, create_it_pt_cap, create_page_table_cap, create_root_cnode};
-use crate::cspace::CNodeSlot::SeL4CapInitThreadIpcBuffer;
-use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry};
+use common::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE, UI_V_ENTRY,
+    CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS};
+use crate::cspace::{Cap, CapTag, create_bi_frame_cap, create_domain_cap, create_frame_cap, create_it_pt_cap, create_page_table_cap, create_root_cnode};
+use common::types::CNodeSlot;
+use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry, ASIDPool};
 use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX, create_idle_thread, create_initial_thread, init_core_state};
-use crate::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
-use crate::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down};
+use common::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
+use common::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down, bit}; 
 
 use self::root_server::RootServer;
 
@@ -107,7 +108,7 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
     let ipc_buf_ptr = ROOT_SERVER.lock().ipc_buf;
     (ipc_buf_ptr as usize..(ipc_buf_ptr + bit(PAGE_BITS)) as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
     let ipc_buf_cap = create_frame_cap(root_cnode_cap, ipc_buf_vptr, ROOT_SERVER.lock().ipc_buf,
-                                      SeL4CapInitThreadIpcBuffer as usize, IT_ASID);
+                                      CNodeSlot::SeL4CapInitThreadIpcBuffer as usize, IT_ASID);
     map_frame_cap(it_vspace_cap, ipc_buf_cap);
 
     let user_image_frames_reg = create_frame_caps_of_region(root_cnode_cap, it_vspace_cap, ui_reg, ui_vp_offset, IT_ASID);

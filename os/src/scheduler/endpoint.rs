@@ -1,6 +1,6 @@
 use crate::scheduler::tcb::TCBQueue;
-use crate::types::Pptr;
-use crate::utils::sign_extend;
+use common::types::Pptr;
+use common::utils::sign_extend;
 
 pub struct EndPoint {
     words: [usize; 2],

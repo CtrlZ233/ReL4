@@ -1,21 +1,19 @@
 use log::{debug, error};
-use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, CONFIG_ROOT_CNODE_SIZE_BITS, GUARD_BITS, IT_ASID, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, SEL4_WORD_BITS, WORD_BITS, WORD_RADIX};
-use crate::cspace::cnode::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
+use common::config::{CONFIG_ROOT_CNODE_SIZE_BITS, IT_ASID, SEL4_WORD_BITS, WORD_RADIX};
+use common::types::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
 use crate::root_server::ROOT_SERVER;
-use crate::types::{ASIDSizeConstants, Region, SlotPos};
-use crate::types::{Pptr, Vptr, VmRights::VMReadWrite};
+use common::types::{ASIDSizeConstants, SlotPos, Pptr, Vptr, VmRights::VMReadWrite, CNodeSlot};
 
 mod cnode;
 mod cap;
 
 pub use cap::{Cap, CapTag, CapTableEntry, MDBNode};
-pub use cnode::{CNode, CNodeSlot, TCBCNodeIndex};
+pub use cnode::{CNode, TCBCNodeIndex};
 use crate::boot::NDKS_BOOT;
 use crate::cspace::cap::{is_cap_revocable};
-use crate::cspace::CapTag::{CapCNodeCap, CapPageTableCap};
-use crate::cspace::CNodeSlot::SeL4CapInitThreadTcb;
+use crate::cspace::CapTag::CapCNodeCap;
 use crate::untyped::set_untyped_cap_as_full;
-use crate::utils::{bit, mask};
+use common::utils::{bit, mask};
 
 pub fn create_root_cnode() -> Cap {
     let cap = Cap::new_cnode_cap(CONFIG_ROOT_CNODE_SIZE_BITS,
@@ -52,7 +50,7 @@ pub fn create_it_pt_cap(cnode_cap: Cap, pptr: Pptr, vptr: Vptr, asid: usize) -> 
 
 pub fn create_init_thread_cap(cnode_cap: Cap, tcb_ptr: Pptr) -> Cap {
     let cap = Cap::new_thread_cap(tcb_ptr);
-    write_slot(cnode_cap.get_cap_pptr(), SeL4CapInitThreadTcb as usize, cap);
+    write_slot(cnode_cap.get_cap_pptr(), CNodeSlot::SeL4CapInitThreadTcb as usize, cap);
     cap
 }
 

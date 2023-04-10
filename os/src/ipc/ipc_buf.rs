@@ -1,5 +1,5 @@
-use crate::config::{SEL4_MSG_MAX_EXTRA_CAPS, SEL4_MSG_MAX_LEN};
-use crate::types::Cptr;
+use common::config::{SEL4_MSG_MAX_EXTRA_CAPS, SEL4_MSG_MAX_LEN};
+use common::types::Cptr;
 
 pub struct IpcBuffer {
     tag: MessageInfo,

@@ -1,7 +1,8 @@
-use syscall::{InvocationLabel, MessageInfo};
+use common::message::{InvocationLabel, MessageInfo};
 use crate::call_with_mrs;
+use common::types::Cptr;
 
-pub fn tcb_suspend(service: usize) -> usize {
+pub fn tcb_suspend(service: Cptr) -> usize {
     let tag = MessageInfo::new(InvocationLabel::TCBSuspend, 0, 0, 0);
     let mut mr0: usize = 0;
     let mut mr1: usize = 0;

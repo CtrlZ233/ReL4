@@ -1,12 +1,10 @@
-mod untyped;
 
 use log::{debug, error, warn};
-pub use untyped::UntypedDesc;
 use crate::boot::{BootInfo, NDKS_BOOT};
-use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, PPTR_BASE_OFFSET, WORD_BITS};
+use common::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, PPTR_BASE_OFFSET, WORD_BITS};
 use crate::cspace::{Cap, CapTableEntry, CapTag, create_untyped_cap};
-use crate::types::{Pptr, Region, SlotPos};
-use crate::utils::{bit, bool2usize};
+use common::types::{Pptr, Region, SlotPos, UntypedDesc};
+use common::utils::bit;
 
 pub fn create_untyped_for_region(cnode_cap: Cap, is_device_mem: bool, reg: Region, first_slot: SlotPos) {
     let mut start = reg.start;

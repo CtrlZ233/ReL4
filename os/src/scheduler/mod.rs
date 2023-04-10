@@ -15,19 +15,20 @@ use domain_schedule::DomainScheduler;
 pub use tcb::{TCB, IdleTCB, ThreadStateEnum};
 pub use register::*;
 
-use crate::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS, CONFIG_NUM_DOMAINS, CONFIG_NUM_PRIORITIES, NUM_READY_QUEUES, L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr, utils::{prio_2_l1_index, invert_l1_index, bit, mask, l1_index_2_prio}, mm::activate_kernel_vspace};
-use crate::config::PPTR_BASE_OFFSET;
+use common::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS, CONFIG_NUM_DOMAINS, CONFIG_NUM_PRIORITIES, NUM_READY_QUEUES, L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr};
+use crate::mm::activate_kernel_vspace;
+use common::config::PPTR_BASE_OFFSET;
 use crate::cspace::{Cap, CNode, create_init_thread_cap, cte_insert, derive_cap, TCBCNodeIndex};
 use crate::cspace::CapTag::CapPageTableCap;
-use crate::cspace::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapInitThreadIpcBuffer, SeL4CapInitThreadVspace};
+use common::types::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapInitThreadIpcBuffer, SeL4CapInitThreadVspace};
 use crate::cspace::TCBCNodeIndex::TCBVTable;
 use crate::mm::set_vspace_root;
 use crate::root_server::ROOT_SERVER;
 use crate::scheduler::domain_schedule::{KS_CUR_DOMAIN, KS_DOMAIN_TIME, PriorityConst};
 use crate::scheduler::tcb::TCBCNode;
 use crate::scheduler::tcb::ThreadStateEnum::ThreadStateRunning;
-use crate::types::Vptr;
-use crate::utils::hart_id;
+use common::types::Vptr;
+use common::utils::{hart_id, prio_2_l1_index, invert_l1_index, bit, mask, l1_index_2_prio};
 
 use self::tcb::TCBQueue;
 lazy_static!{

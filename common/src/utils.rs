@@ -1,4 +1,4 @@
-use crate::config::{CONFIG_PT_LEVELS, PAGE_TABLE_INDEX_BITS, PAGE_BITS, WORD_RADIX, L2_BITMAP_SIZE};
+use super::config::{CONFIG_PT_LEVELS, PAGE_TABLE_INDEX_BITS, PAGE_BITS, WORD_RADIX, L2_BITMAP_SIZE};
 
 #[inline]
 pub fn mask(n: usize) -> usize {

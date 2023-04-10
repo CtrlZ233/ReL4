@@ -16,6 +16,7 @@
 extern crate bitflags;
 
 extern crate syscall;
+extern crate common;
 
 use core::arch::global_asm;
 use log::*;
@@ -25,12 +26,9 @@ mod console;
 mod lang_items;
 mod logging;
 mod sbi;
-mod config;
 mod mm;
-mod utils;
 mod boot;
 mod root_server;
-mod types;
 mod cspace;
 mod scheduler;
 mod ipc;

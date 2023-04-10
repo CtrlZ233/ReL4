@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 user_lib = { path = "../user_lib" }
+common = { path = "../common" }
 
 [profile.release]
 debug = true

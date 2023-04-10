@@ -1,4 +1,4 @@
-use crate::{types::{Pptr, Region}};
+use common::types::{Pptr, Region};
 
 #[derive(Default, Debug)]
 pub struct RootServer {

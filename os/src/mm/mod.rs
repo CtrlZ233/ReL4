@@ -7,14 +7,12 @@ pub use asid::ASIDPool;
 use riscv::register::satp;
 use riscv::asm::sfence_vma_all;
 use spin::Mutex;
-use crate::types::{Paddr, VirtRegion};
+use common::utils::*;
 
-use crate::utils::*;
-
-use crate::config::{CONFIG_PT_LEVELS, PPTR_BASE, PPTR_TOP, PADDR_BASE, PPTR_BASE_OFFSET, ROOT_PAGE_TABLE_SIZE, KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PAGE_BITS, PV_BASE_OFFSET, PAGE_TABLE_INDEX_BITS};
+use common::config::{CONFIG_PT_LEVELS, PPTR_BASE, PPTR_TOP, PADDR_BASE, PPTR_BASE_OFFSET, ROOT_PAGE_TABLE_SIZE, KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PAGE_BITS, PV_BASE_OFFSET, PAGE_TABLE_INDEX_BITS};
 use crate::cspace::Cap;
 use crate::mm::page_table::PTEFlags;
-use crate::types::{Pptr, Vptr};
+use common::types::{Pptr, Vptr, Paddr, VirtRegion};
 
 pub fn init() {
     map_kernel_window();

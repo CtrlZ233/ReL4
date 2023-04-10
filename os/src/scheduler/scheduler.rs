@@ -1,5 +1,5 @@
 use super::tcb::TCB;
-use crate::config::{CONFIG_NUM_PRIORITIES, CONFIG_NUM_DOMAINS};
+use common::config::{CONFIG_NUM_PRIORITIES, CONFIG_NUM_DOMAINS};
 struct TCBQueue {
     head: *mut TCB,
     end: *mut TCB,

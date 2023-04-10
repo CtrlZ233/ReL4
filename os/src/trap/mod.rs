@@ -2,7 +2,7 @@ use core::arch::{asm, global_asm};
 use log::debug;
 use crate::sbi;
 use crate::scheduler::{KS_CUR_THREAD, TCB};
-use crate::utils::hart_id;
+use common::utils::hart_id;
 use riscv::register:: {
     stvec,
 };

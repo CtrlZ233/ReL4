@@ -1,7 +1,6 @@
-use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, PAGE_BITS, SEL4_WORD_BITS};
-use crate::types::{NodeId, Paddr, Vptr, SlotRegion};
-use crate::untyped::UntypedDesc;
-use crate::utils::{bit, round_up};
+use common::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, PAGE_BITS, SEL4_WORD_BITS};
+use common::types::{NodeId, Vptr, SlotRegion, UntypedDesc};
+use common::utils::{bit, round_up};
 
 #[derive(Copy, Clone)]
 pub struct BootInfoHeader {
@@ -20,6 +19,7 @@ pub enum BootInfoID {
     Sel4BootInfoHeaderNum,
 }
 
+#[derive(Debug)]
 pub struct BootInfo {
     pub extra_len: usize,
     pub node_id: NodeId,

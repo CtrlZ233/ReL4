@@ -1,7 +1,6 @@
 
-use crate::types::{Region, PhyRegion};
-use crate::config::{MAX_NUM_RESV_REG, MAX_NUM_FREEMEM_REG};
-use crate::types::{Pptr, SlotPos};
+use common::types::{Region, PhyRegion, Pptr, SlotPos};
+use common::config::{MAX_NUM_RESV_REG, MAX_NUM_FREEMEM_REG};
 
 #[derive(Default)]
 pub struct NdksBoot {

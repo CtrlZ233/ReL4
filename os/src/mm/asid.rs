@@ -1,4 +1,4 @@
-use crate::types::{PTEPtr, ASIDSizeConstants};
+use common::types::{PTEPtr, ASIDSizeConstants};
 
 pub struct ASIDPool {
     array: [PTEPtr; 1 << (ASIDSizeConstants::ASIDLowBits as usize)],

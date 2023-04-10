@@ -2,18 +2,17 @@ mod init_freemem;
 mod ndks_boot;
 mod boot_info;
 
-use crate::config::{NUM_RESERVED_REGIONS, MAX_NUM_FREEMEM_REG, AVAIL_PHY_MEM_START, AVAIL_PHY_MEM_END, AVAIL_MEM_DEVICE, CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, WORD_BITS, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, CONFIG_PADDR_USER_DEVICE_TOP, CONFIG_ROOT_CNODE_SIZE_BITS};
-use crate::types::{Region, PhyRegion, VirtRegion, APPtr, ASIDSizeConstants, SlotPos, Pptr, SlotRegion};
+use common::config::{NUM_RESERVED_REGIONS, MAX_NUM_FREEMEM_REG, AVAIL_PHY_MEM_START, AVAIL_PHY_MEM_END, AVAIL_MEM_DEVICE, CONFIG_ROOT_CNODE_SIZE_BITS};
+use common::types::{Region, PhyRegion, VirtRegion, APPtr, ASIDSizeConstants, SlotRegion, Vptr};
 use lazy_static::*;
 use log::debug;
 use spin::Mutex;
 use ndks_boot::NdksBoot;
-use crate::config::{BI_FRAME_SIZE_BITS, PAGE_BITS, UI_P_REG_END, UI_P_REG_START, UI_PV_OFFSET, USER_TOP};
-use crate::utils::bit;
+use common::config::{BI_FRAME_SIZE_BITS, PAGE_BITS, UI_P_REG_END, UI_P_REG_START, UI_PV_OFFSET, USER_TOP};
+use common::utils::bit;
 
 pub use boot_info::{calculate_extra_bi_size_bits, BootInfo, BootInfoID, BootInfoHeader};
 use crate::cspace::Cap;
-use crate::types::Vptr;
 use crate::untyped::create_untyped_for_region;
 
 lazy_static!{
@@ -82,7 +81,7 @@ fn boot_info_finalise() {
     boot_info.empty = SlotRegion {
         start: NDKS_BOOT.lock().slot_pos_cur,
         end: bit(CONFIG_ROOT_CNODE_SIZE_BITS),
-    }
+    };
 }
 
 pub fn init() {

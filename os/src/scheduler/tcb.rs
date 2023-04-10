@@ -1,16 +1,18 @@
-use crate::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr, Vptr}, utils::{bit, hart_id, sign_extend, bool2usize}, scheduler::re_schedule};
+use common::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr, Vptr}};
+use crate::scheduler::re_schedule;
+use common::utils::{bit, hart_id, sign_extend, bool2usize, mask, page_bits_for_size};
 use core::ops::{Index, IndexMut};
 use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD, ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap};
 
 use log::{error, debug};
-use crate::config::{SEL4_TCB_BITS, VM_READ_ONLY, VM_READ_WRITE, WORD_BITS};
+use common::config::{SEL4_TCB_BITS, VM_READ_ONLY, VM_READ_WRITE, WORD_BITS};
 use crate::cspace::{Cap, CapTableEntry, CapTag, MDBNode, resolve_address_bits};
 use crate::cspace::TCBCNodeIndex::{TCBBuffer, TCBCTable, TCBReply};
 use crate::scheduler::endpoint::{EndPoint, EndPointState};
 use crate::scheduler::Register::FaultIP;
 use crate::scheduler::register::Register::{NextIP, SSTATUS};
 use crate::scheduler::ThreadStateEnum::{ThreadStateInactive, ThreadStateRunning};
-use crate::utils::{mask, page_bits_for_size};
+
 
 #[derive(Default)]
 pub struct TCB {
@@ -24,7 +26,7 @@ pub struct TCB {
     pub tcb_priority: Prio,
     pub tcb_time_slice: usize,
     pub tcb_fault_handler: Cptr,
-    pub tcb_ipc_buffer: Vptr,
+    pub tcb_ipc_buffer: Pptr,
 
     pub tcb_sched_next: Pptr,
     pub tcb_sched_prev: Pptr,

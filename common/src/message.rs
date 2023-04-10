@@ -1,4 +1,9 @@
-use super::sign_extend;
+pub const NUM_MSG_REGISTRES: usize = 4;
+pub const NUM_FRAME_REGISTERS: usize = 16;
+pub const NUM_GP_REGISTERS: usize = 16;
+pub const NUM_EXCEPTION_MSG: usize = 2;
+pub const NUM_SYSCALL_MSG: usize = 10;
+
 
 #[derive(Default, Clone, Copy)]
 pub struct MessageInfo {
@@ -23,15 +28,22 @@ impl MessageInfo {
     }
 
     pub fn get_label(&self) -> usize {
-        sign_extend((self.words[0] & 0xfffffffffffff000) >> 12, 0x0)
+        Self::sign_extend((self.words[0] & 0xfffffffffffff000) >> 12, 0x0)
     }
 
     pub fn get_extra_caps(&self) -> usize {
-        sign_extend((self.words[0] & 0x180) >> 7, 0x0)
+        Self::sign_extend((self.words[0] & 0x180) >> 7, 0x0)
     }
 
     pub fn get_length(&self) -> usize {
-        sign_extend((self.words[0] & 0x7f) >> 0, 0x0)
+        Self::sign_extend((self.words[0] & 0x7f) >> 0, 0x0)
+    }
+
+    fn sign_extend(ret: usize, sign: usize) -> usize {
+        if ret & (1 << 63) != 0 {
+            return ret | sign;
+        }
+        ret
     }
 }
 
@@ -77,5 +89,6 @@ impl InvocationLabel {
         }
     }
 }
+
 
 

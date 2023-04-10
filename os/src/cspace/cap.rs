@@ -1,7 +1,5 @@
-use crate::types::{Pptr, Vptr};
-use crate::utils::{bit, bool2usize, sign_extend};
-use log::debug;
-use crate::config::MIN_UNTYPED_BITS;
+use common::types::{Pptr, Vptr};
+use common::utils::{bool2usize, sign_extend};
 
 #[derive(Clone, Copy)]
 pub struct Cap {

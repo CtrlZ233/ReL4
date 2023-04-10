@@ -16,5 +16,6 @@ riscv = { git = "https://github.com/duskmoon314/riscv", branch = "extN", feature
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 spin = { version = "0.9", features = ["use_ticket_mutex"] }
 syscall = { path = "../syscall" }
+common = { path = "../common" }
 [profile.release]
 debug = true
