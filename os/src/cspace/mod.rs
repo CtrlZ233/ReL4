@@ -1,5 +1,5 @@
 use log::{debug, error};
-use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, CONFIG_ROOT_CNODE_SIZE_BITS, IT_ASID, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, SEL4_WORD_BITS, WORD_BITS};
+use crate::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, CONFIG_ROOT_CNODE_SIZE_BITS, GUARD_BITS, IT_ASID, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, SEL4_WORD_BITS, WORD_BITS};
 use crate::cspace::cnode::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
 use crate::root_server::ROOT_SERVER;
 use crate::types::{ASIDSizeConstants, Region, SlotPos};
@@ -12,10 +12,10 @@ pub use cap::{Cap, CapTag, CapTableEntry, MDBNode};
 pub use cnode::{CNode, CNodeSlot, TCBCNodeIndex};
 use crate::boot::NDKS_BOOT;
 use crate::cspace::cap::{is_cap_revocable};
-use crate::cspace::CapTag::CapPageTableCap;
+use crate::cspace::CapTag::{CapCNodeCap, CapPageTableCap};
 use crate::cspace::CNodeSlot::SeL4CapInitThreadTcb;
 use crate::untyped::set_untyped_cap_as_full;
-use crate::utils::bit;
+use crate::utils::{bit, mask};
 
 pub fn create_root_cnode() -> Cap {
     let cap = Cap::new_cnode_cap(CONFIG_ROOT_CNODE_SIZE_BITS,
@@ -127,5 +127,45 @@ pub fn cte_insert(new_cap: Cap, src_slot: &mut CapTableEntry, dest_slot: &mut Ca
         };
         prev_of_new_mdb.set_mdb_prev(dest_slot as *const CapTableEntry as Pptr);
     }
+}
+
+pub fn resolve_address_bits(node_cap: Cap, cap_ptr: usize, n_bits: usize) -> Option<*mut CapTableEntry> {
+    if node_cap.get_cap_type() != CapCNodeCap {
+        return None;
+    }
+    let mut local_n_bits = n_bits;
+    let mut local_node_cap = node_cap;
+    while true {
+        let radix_bits = local_node_cap.get_cnode_radix();
+        let guard_bits = local_node_cap.get_cnode_guard_size();
+        let level_bits = radix_bits + guard_bits;
+
+        assert_ne!(level_bits, 0);
+
+        let cap_guard = local_node_cap.get_cnode_guard();
+
+        let guard = (cap_ptr >> ((local_n_bits - guard_bits) & mask(GUARD_BITS))) & mask(GUARD_BITS);
+        if guard_bits > local_n_bits || guard != cap_guard {
+            return None;
+        }
+
+        if level_bits > local_n_bits {
+            return None;
+        }
+        let offset = (cap_ptr >> (local_n_bits - level_bits)) & mask(radix_bits);
+        let slot = unsafe {
+            &mut (&mut *(local_node_cap.get_cap_pptr() as *mut CNode))[offset]
+        };
+        if local_n_bits == level_bits {
+            return Some(slot as *mut CapTableEntry);
+        }
+        local_n_bits -= level_bits;
+        local_node_cap =  slot.cap;
+
+        if local_node_cap.get_cap_type() != CapCNodeCap {
+            return Some(slot as *mut CapTableEntry);
+        }
+    }
+    None
 }
 

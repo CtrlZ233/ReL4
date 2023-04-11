@@ -73,3 +73,10 @@ pub const CONFIG_PADDR_USER_DEVICE_TOP: usize = 0x800000_0000;
 
 pub const CONFIG_NUM_DOMAINS: usize = 1;
 
+
+pub const GUARD_BITS: usize = 6;
+pub const WORD_RADIX: usize = GUARD_BITS;
+
+pub const VM_KERNEL_ONLY: usize = 1;
+pub const VM_READ_ONLY: usize = 2;
+pub const VM_READ_WRITE: usize = 3;

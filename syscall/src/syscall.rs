@@ -1,11 +1,11 @@
 use core::arch::asm;
 
-pub const SYS_PUT_CHAR: usize = 0;
-pub const SYS_CALL: usize = 1;
-pub const SYS_SEND: usize = 2;
+pub const SYS_PUT_CHAR: isize = -9;
+pub const SYS_CALL: isize = -1;
+pub const SYS_SEND: isize = -3;
 
-pub fn sysc_send_recv(sys: usize, dest: usize, &mut out_badge: usize, info: usize, &mut out_info: usize,
-                      &mut in_out_mr0: usize, &mut in_out_mr1: usize, &mut in_out_mr2: usize, &mut in_out_mr3: usize) {
+pub fn sysc_send_recv(sys: isize, dest: usize, out_badge: &mut usize, info: usize, out_info: &mut usize,
+                      in_out_mr0: &mut usize, in_out_mr1: &mut usize, in_out_mr2: &mut usize, in_out_mr3: &mut usize) {
     let mut ret: isize;
     unsafe {
         core::arch::asm!(

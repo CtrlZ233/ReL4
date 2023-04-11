@@ -57,3 +57,9 @@ pub fn sign_extend(ret: usize, sign: usize) -> usize {
     }
     ret
 }
+
+#[inline]
+pub fn page_bits_for_size(page_size: usize) -> usize {
+    // TODO: different page size
+    return PAGE_BITS;
+}

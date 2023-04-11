@@ -15,6 +15,8 @@
 #[macro_use]
 extern crate bitflags;
 
+extern crate syscall;
+
 use core::arch::global_asm;
 use log::*;
 
@@ -34,7 +36,7 @@ mod scheduler;
 mod ipc;
 mod untyped;
 mod trap;
-mod syscall;
+mod inner_syscall;
 
 
 global_asm!(include_str!("entry.asm"));

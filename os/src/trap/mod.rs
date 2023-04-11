@@ -6,7 +6,7 @@ use crate::utils::hart_id;
 use riscv::register:: {
     stvec,
 };
-use crate::syscall;
+use crate::inner_syscall;
 use riscv::register::stvec::TrapMode;
 global_asm!(include_str!("trap.asm"));
 
@@ -83,10 +83,10 @@ pub fn restore_user_context() {
 }
 
 #[no_mangle]
-pub fn rust_handle_syscall(cptr: usize, msg_info: usize, syscall: usize) -> ! {
+pub fn rust_handle_syscall(cptr: usize, msg_info: usize, syscall: isize) -> ! {
 
-    // debug!("hello handle_syscall: cptr: {}, msg_info: {}, syscall: {}", cptr, msg_info, syscall);
-    syscall::slowpath(syscall);
+    // debug!("hello handle_syscall: cptr: {}, msg_info: {}, inner_syscall: {}", cptr, msg_info, inner_syscall);
+    inner_syscall::slowpath(syscall);
     sbi::shutdown(false)
 }
 

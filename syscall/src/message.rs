@@ -1,5 +1,6 @@
 use super::sign_extend;
 
+#[derive(Default, Clone, Copy)]
 pub struct MessageInfo {
     pub words: [usize; 1],
 }
@@ -15,8 +16,22 @@ impl MessageInfo {
         msg
     }
 
+    pub fn from_word(word: usize) -> Self {
+        let mut msg = MessageInfo { words: [0; 1]};
+        msg.words[0] = word;
+        msg
+    }
+
     pub fn get_label(&self) -> usize {
         sign_extend((self.words[0] & 0xfffffffffffff000) >> 12, 0x0)
+    }
+
+    pub fn get_extra_caps(&self) -> usize {
+        sign_extend((self.words[0] & 0x180) >> 7, 0x0)
+    }
+
+    pub fn get_length(&self) -> usize {
+        sign_extend((self.words[0] & 0x7f) >> 0, 0x0)
     }
 }
 
@@ -52,6 +67,15 @@ pub enum InvocationLabel {
     IRQClearIRQHandler = 28,
     DomainSetSet = 29,
     nInvocationLabels = 30,
+}
+
+impl InvocationLabel {
+    pub fn from_usize(label: usize) -> Self {
+        assert!(label >= InvocationLabel::InvalidInvocation as usize && label < InvocationLabel::nInvocationLabels as usize);
+        unsafe {
+            core::mem::transmute::<u8, InvocationLabel>(label as u8)
+        }
+    }
 }
 
 

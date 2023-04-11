@@ -57,6 +57,21 @@ impl Cap {
         }
     }
 
+    pub fn get_cnode_radix(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
+        sign_extend((self.words[0] & 0x1f800000000000) >> 47, 0x0)
+    }
+
+    pub fn get_cnode_guard_size(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
+        sign_extend((self.words[0] & 0x7e0000000000000) >> 53, 0x0)
+    }
+
+    pub fn get_cnode_guard(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
+        sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
+    }
+
     pub fn get_pt_mapped_addr(&self) -> Vptr {
         assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
         sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
@@ -82,6 +97,21 @@ impl Cap {
         sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000)
     }
 
+    pub fn get_frame_size(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
+        sign_extend((self.words[0] & 0x600000000000000) >> 57, 0x0)
+    }
+
+    pub fn get_frame_is_device(&self) -> bool {
+        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
+        sign_extend((self.words[0] & 0x40000000000000) >> 54, 0x0) == 1
+    }
+
+    pub fn get_frame_frame_vm_right(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
+        sign_extend((self.words[0] & 0x180000000000000) >> 55, 0x0)
+    }
+
     pub fn get_ep_badge(&self) -> usize {
         assert_eq!(self.get_cap_type(), CapTag::CapEndpointCap);
         sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
@@ -95,6 +125,11 @@ impl Cap {
     pub fn get_untyped_cap_block_size(&self) -> usize {
         assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
         sign_extend(self.words[1] & 0x3f, 0x0)
+    }
+
+    pub fn get_tcb_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapThreadCap);
+        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
     }
 
     pub fn set_untyped_cap_free_index(&mut self, size: usize) {

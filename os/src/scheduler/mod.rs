@@ -2,6 +2,7 @@ mod domain_schedule;
 mod tcb;
 mod register;
 mod scheduler;
+mod endpoint;
 
 use core::sync::atomic::AtomicUsize;
 use lazy_static::*;
@@ -11,7 +12,7 @@ use core::sync::atomic::Ordering::SeqCst;
 use spin::Mutex;
 use domain_schedule::DomainScheduler;
 
-pub use tcb::{TCB, IdleTCB};
+pub use tcb::{TCB, IdleTCB, ThreadStateEnum};
 pub use register::*;
 
 use crate::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS}, types::Pptr};
