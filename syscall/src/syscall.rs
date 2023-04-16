@@ -19,6 +19,15 @@ pub fn sysc_send_recv(sys: isize, dest: usize, out_badge: &mut usize, info: usiz
             in("a7") sys,
         );
     }
+    unsafe {
+        asm!("mv {}, a1", out(reg) *out_info);
+        asm!("mv {}, a0", out(reg) *out_badge);
+        asm!("mv {}, a2", out(reg) *in_out_mr0);
+        asm!("mv {}, a3", out(reg) *in_out_mr1);
+        asm!("mv {}, a4", out(reg) *in_out_mr2);
+        asm!("mv {}, a5", out(reg) *in_out_mr3);
+    }
+
     // TODO: out register
     // *out_info = info;
     // *out_badge = dest;

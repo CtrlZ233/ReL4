@@ -1,11 +1,13 @@
 use common::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr, Vptr}};
-use crate::scheduler::re_schedule;
-use common::utils::{bit, hart_id, sign_extend, bool2usize, mask, page_bits_for_size};
+use crate::scheduler::{BADGE_REGISTER, MSG_INFO_REGISTER, re_schedule};
+use common::utils::{bit, hart_id, sign_extend, bool2usize, mask, page_bits_for_size, convert_to_mut_type_ref, convert_to_type_ref};
 use core::ops::{Index, IndexMut};
 use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD, ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap};
 
 use log::{error, debug};
 use common::config::{SEL4_TCB_BITS, VM_READ_ONLY, VM_READ_WRITE, WORD_BITS};
+use common::message::InvocationLabel::InvalidInvocation;
+use common::message::MessageInfo;
 use crate::cspace::{Cap, CapTableEntry, CapTag, MDBNode, resolve_address_bits};
 use crate::cspace::TCBCNodeIndex::{TCBBuffer, TCBCTable, TCBReply};
 use crate::scheduler::endpoint::{EndPoint, EndPointState};
@@ -53,6 +55,12 @@ impl TCB {
         self.schedule();
     }
 
+    pub fn reply_from_kernel_success_empty(&mut self) {
+        self.set_register(BADGE_REGISTER, 0);
+        self.set_register(MSG_INFO_REGISTER,
+                          MessageInfo::new(InvalidInvocation, 0, 0, 0).words[0]);
+    }
+
     pub fn suspend(&mut self) {
         self.cancel_ipc();
         if self.get_state() == ThreadStateRunning {
@@ -70,9 +78,7 @@ impl TCB {
         match self.get_state() {
             ThreadStateEnum::ThreadStateBlockedOnSend | ThreadStateEnum::ThreadStateBlockedOnReceive => {
                 let epptr = self.tcb_state.get_blocking_object();
-                let endpoint_ref = unsafe {
-                    &mut *(epptr as *mut EndPoint)
-                };
+                let endpoint_ref = convert_to_mut_type_ref::<EndPoint>(epptr);
                 assert_ne!(endpoint_ref.get_state(), EndPointState::EPStateIdle);
 
                 let mut queue = endpoint_ref.get_queue();
@@ -103,9 +109,7 @@ impl TCB {
             };
 
             if self.tcb_sched_prev != 0 {
-                let prev = unsafe {
-                    &mut *(self.tcb_sched_prev as *mut TCB)
-                };
+                let prev = convert_to_mut_type_ref::<TCB>(self.tcb_sched_prev);
                 prev.tcb_sched_next = self.tcb_sched_next;
             } else {
                 queue.head = self.tcb_sched_next as *mut TCB;
@@ -116,9 +120,7 @@ impl TCB {
             
 
             if self.tcb_sched_next != 0 {
-                let next = unsafe {
-                    &mut *(self.tcb_sched_next as *mut TCB)
-                };
+                let next = convert_to_mut_type_ref::<TCB>(self.tcb_sched_next);
                 next.tcb_sched_prev = self.tcb_sched_prev;
             } else {
                 queue.end = self.tcb_sched_prev as *mut TCB;
@@ -213,9 +215,7 @@ impl TCB {
     }
 
     pub fn setup_replay_master(&mut self) {
-        let cnode = unsafe {
-            &mut *(self.get_cnode_ptr_of_this() as *mut TCBCNode)
-        };
+        let cnode = convert_to_mut_type_ref::<TCBCNode>(self.get_cnode_ptr_of_this());
         let slot = &mut cnode[TCBReply as usize];
         if slot.cap.get_cap_type() == CapTag::CapNullCap {
             slot.cap = Cap::new_reply_cap(true, true, self as *const TCB as Pptr);
@@ -230,9 +230,8 @@ impl TCB {
     }
 
     pub fn lookup_slot(&self, cap_ptr: usize) -> Option<*mut CapTableEntry> {
-        let thread_root_cap = unsafe {
-            (&mut *(self.get_cnode_ptr_of_this() as *mut TCBCNode))[TCBCTable as usize].cap
-        };
+
+        let thread_root_cap = convert_to_type_ref::<TCBCNode>(self.get_cnode_ptr_of_this())[TCBCTable as usize].cap;
         resolve_address_bits(thread_root_cap, cap_ptr, WORD_BITS)
     }
 
@@ -251,9 +250,8 @@ impl TCB {
 
     pub fn lookup_ipc_buffer(&self, is_receiver: bool) -> Option<Pptr> {
         let w_buffer_ptr = self.tcb_ipc_buffer;
-        let buffer_cap = unsafe {
-            (&mut *(self.get_cnode_ptr_of_this() as *mut TCBCNode))[TCBBuffer as usize].cap
-        };
+
+        let buffer_cap = convert_to_type_ref::<TCBCNode>(self.get_cnode_ptr_of_this())[TCBBuffer as usize].cap;
 
         if buffer_cap.get_cap_type() != CapTag::CapFrameCap {
             return None;
@@ -381,18 +379,14 @@ impl TCBQueue {
 
     pub fn de_queue(&mut self, tcb: &mut TCB) {
         if tcb.tcb_ep_prev != 0 {
-            let prev = unsafe {
-                &mut *(tcb.tcb_ep_prev as *mut TCB)
-            };
+            let prev = convert_to_mut_type_ref::<TCB>(tcb.tcb_ep_prev);
             prev.tcb_ep_next = tcb.tcb_ep_next;
         } else {
             self.head = tcb.tcb_ep_next as *mut TCB;
         }
 
         if tcb.tcb_ep_next != 0 {
-            let next = unsafe {
-                &mut *(tcb.tcb_ep_next as *mut TCB)
-            };
+            let next= convert_to_mut_type_ref::<TCB>(tcb.tcb_ep_next);
             next.tcb_ep_prev = tcb.tcb_ep_prev;
         } else {
             self.end = tcb.tcb_ep_prev as *mut TCB;

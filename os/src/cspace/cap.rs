@@ -1,5 +1,7 @@
+use common::config::{CONFIG_RESET_CHUNK_BITS, MIN_UNTYPED_BITS, ROOT_PAGE_TABLE_SIZE, SEL4_ASID_POOL_BITS, SEL4_ENDPOINT_BITS, SEL4_NOTIFICATION_BITS, SEL4_PAGE_BITS, SEL4_SLOT_BITS, SEL4_TCB_BITS};
 use common::types::{Pptr, Vptr};
-use common::utils::{bool2usize, sign_extend};
+use common::utils::{bit, bool2usize, mask, page_bits_for_size, round_down, sign_extend};
+use log::debug;
 
 #[derive(Clone, Copy)]
 pub struct Cap {
@@ -15,6 +17,99 @@ pub struct MDBNode {
 pub struct CapTableEntry {
     pub(crate) cap: Cap,
     pub(crate) mdb_node: MDBNode,
+}
+
+impl CapTableEntry {
+    pub fn ensure_empty_slot(&self) -> bool {
+        self.cap.get_cap_type() == CapTag::CapNullCap
+    }
+
+    pub fn ensure_no_child(&self) -> bool {
+        if self.mdb_node.get_mdb_next() != 0 {
+            let next = unsafe {
+                &mut *(self.mdb_node.get_mdb_next() as *mut CapTableEntry)
+            };
+            if self.is_mdb_parent_of(next) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn reset_untyped_cap(&mut self) -> bool {
+        assert_eq!(self.cap.get_cap_type(), CapTag::CapUntypedCap);
+        let prev_cap = self.cap;
+        let block_size = prev_cap.get_untyped_cap_block_size();
+        let region_base = prev_cap.get_untyped_ptr();
+        let chunk = CONFIG_RESET_CHUNK_BITS;
+        let mut offset = prev_cap.get_untyped_free_index() << MIN_UNTYPED_BITS;
+        let device_mem = prev_cap.get_untyped_is_device();
+        if offset == 0 {
+            return true;
+        }
+        if device_mem || block_size < chunk {
+            if !device_mem {
+                let end = region_base + bit(block_size);
+                unsafe {
+                    (region_base as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
+                }
+            }
+            self.cap.set_untyped_cap_free_index(0);
+        } else {
+            let mut local_offset = round_down(offset - 1, chunk);
+            debug!("local_offset: {}, region_base: {:#x}", local_offset, region_base);
+            let stride = bit(chunk);
+            while true {
+                let start = region_base + local_offset;
+                let end = region_base + bit(chunk);
+                assert!(start >= 0);
+                unsafe {
+                    (start as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
+                }
+                self.cap.set_untyped_cap_free_index((local_offset as usize) >> MIN_UNTYPED_BITS);
+                // TODO: preemption point
+                local_offset -= stride;
+                if local_offset == 0 {
+                    break;
+                }
+            }
+        }
+        true
+    }
+
+    pub fn is_mdb_parent_of(&self, other: &CapTableEntry) -> bool {
+        if !self.mdb_node.get_mdb_revocable() {
+            return false;
+        }
+
+        if !self.cap.same_region_as(&other.cap) {
+            return false;
+        }
+
+        match self.cap.get_cap_type() {
+            CapTag::CapEndpointCap => {
+                let badge = self.cap.get_ep_badge();
+                if badge == 0 {
+                    return true;
+                }
+                return badge == other.cap.get_ep_badge() && !other.mdb_node.get_mdb_first_badged();
+            }
+
+            CapTag::CapNotificationCap => {
+                let badge = self.cap.get_nt_fn_badge();
+                if badge == 0 {
+                    return true;
+                }
+                return badge == other.cap.get_nt_fn_badge() && !other.mdb_node.get_mdb_first_badged();
+            }
+
+            _ => {
+
+            }
+        }
+
+        true
+    }
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -43,15 +138,108 @@ impl Cap {
         }
     }
 
+    pub fn same_region_as(&self, other: &Self) -> bool {
+        match self.get_cap_type() {
+            CapTag::CapUntypedCap => {
+                if other.is_physical() {
+                    let self_base = self.get_cap_pptr();
+                    let other_base = other.get_cap_pptr();
+
+                    let self_top = self_base + mask(self.get_untyped_cap_block_size());
+                    let other_top = other_base + mask(other.get_cap_size_bits());
+                    return self_base <= other_base && other_top <= self_top && other_base <= other_top;
+                }
+            }
+
+            CapTag::CapEndpointCap | CapTag::CapNotificationCap | CapTag::CapThreadCap |
+            CapTag::CapPageTableCap | CapTag::CapASIDPoolCap => {
+                if other.get_cap_type() == self.get_cap_type() {
+                    return self.get_cap_pptr() == other.get_cap_pptr();
+                }
+            }
+
+            CapTag::CapCNodeCap => {
+                if other.get_cap_type() == CapTag::CapCNodeCap {
+                    return self.get_cnode_ptr() == other.get_cnode_ptr() && self.get_cnode_radix() == other.get_cnode_radix();
+                }
+            }
+
+            CapTag::CapReplyCap => {
+                if other.get_cap_type() == CapTag::CapReplyCap {
+                    return self.get_reply_tcb_ptr() == other.get_reply_tcb_ptr();
+                }
+            }
+
+            CapTag::CapDomainCap | CapTag::CapASIDControlCap => {
+                return other.get_cap_type() == self.get_cap_type();
+            }
+
+            CapTag::CapIrqControlCap => {
+                return other.get_cap_type() == CapTag::CapIrqControlCap || other.get_cap_type() == CapTag::CapIrqHandlerCap;
+            }
+
+            CapTag::CapIrqHandlerCap => {
+                if other.get_cap_type() == CapTag::CapIrqHandlerCap {
+                    return self.get_handler_irq() == other.get_handler_irq();
+                }
+            }
+
+            CapTag::CapFrameCap => {
+                if other.get_cap_type() == CapTag::CapFrameCap {
+                    let bot_a = self.get_frame_base_ptr();
+                    let bot_b = other.get_frame_base_ptr();
+                    let top_a = bot_a + mask(page_bits_for_size(self.get_frame_size()));
+                    let top_b = bot_b + mask(page_bits_for_size(other.get_frame_size()));
+                    return bot_a <= bot_b  && top_a >= top_b && bot_b <= top_b;
+                }
+            }
+
+            _ => {
+                return false;
+            }
+        }
+        false
+    }
+
+    pub fn is_physical(&self) -> bool {
+        match self.get_cap_type() {
+            CapTag::CapUntypedCap | CapTag::CapEndpointCap | CapTag::CapNotificationCap |
+            CapTag::CapCNodeCap | CapTag::CapThreadCap | CapTag::CapZombieCap | CapTag::CapFrameCap |
+            CapTag::CapPageTableCap | CapTag::CapASIDPoolCap => {
+                true
+            }
+            _ => false
+        }
+    }
+
     pub fn get_cap_pptr(&self) -> Pptr {
         match self.get_cap_type() {
-            CapTag::CapUntypedCap => sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000),
-            CapTag::CapCNodeCap => sign_extend((self.words[0] & 0x3fffffffff) << 1, 0xffffff8000000000),
-            CapTag::CapPageTableCap => sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000),
-            CapTag::CapASIDPoolCap => sign_extend((self.words[0] & 0x1fffffffff) << 2, 0xffffff8000000000),
-            CapTag::CapThreadCap => sign_extend(self.words[0] & & 0x7fffffffff, 0xffffff8000000000),
+            CapTag::CapUntypedCap => self.get_untyped_ptr(),
+            CapTag::CapCNodeCap => self.get_cnode_ptr(),
+            CapTag::CapPageTableCap => self.get_pt_based_ptr(),
+            CapTag::CapASIDPoolCap => self.get_asid_pool(),
             CapTag::CapFrameCap => self.get_frame_base_ptr(),
-            _ => 0
+            CapTag::CapNotificationCap => self.get_nt_fn_ptr(),
+            CapTag::CapEndpointCap => self.get_ep_ptr(),
+            CapTag::CapThreadCap => self.get_tcb_ptr(),
+            _ => { panic!("invalid type") }
+        }
+    }
+
+    pub fn get_cap_size_bits(&self) -> usize {
+        match self.get_cap_type() {
+            CapTag::CapUntypedCap => self.get_untyped_cap_block_size(),
+            CapTag::CapEndpointCap => SEL4_ENDPOINT_BITS,
+            CapTag::CapNotificationCap => SEL4_NOTIFICATION_BITS,
+            CapTag::CapCNodeCap => self.get_cnode_radix() + SEL4_SLOT_BITS,
+            CapTag::CapThreadCap => SEL4_TCB_BITS,
+            CapTag::CapZombieCap => {
+                panic!("invalid type")
+            }
+            CapTag::CapFrameCap => page_bits_for_size(self.get_frame_size()),
+            CapTag::CapPageTableCap => SEL4_PAGE_BITS,
+            CapTag::CapASIDPoolCap => SEL4_ASID_POOL_BITS,
+            _ => 0,
         }
     }
 
@@ -68,6 +256,11 @@ impl Cap {
     pub fn get_cnode_guard(&self) -> usize {
         assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
         sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
+    }
+
+    pub fn get_cnode_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
+        sign_extend((self.words[0] & 0x3fffffffff) << 1, 0xffffff8000000000)
     }
 
     pub fn get_pt_mapped_addr(&self) -> Vptr {
@@ -115,9 +308,19 @@ impl Cap {
         sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
     }
 
+    pub fn get_ep_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapEndpointCap);
+        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
+    }
+
     pub fn get_nt_fn_badge(&self) -> usize {
         assert_eq!(self.get_cap_type(), CapTag::CapNotificationCap);
         sign_extend(self.words[1] & & 0xffffffffffffffff, 0x0)
+    }
+
+    pub fn get_nt_fn_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapNotificationCap);
+        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
     }
 
     pub fn get_untyped_cap_block_size(&self) -> usize {
@@ -125,9 +328,44 @@ impl Cap {
         sign_extend(self.words[1] & 0x3f, 0x0)
     }
 
+    pub fn get_untyped_free_index(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
+        sign_extend((self.words[1] & 0xfffffffffe000000) >> 25, 0x0)
+    }
+
+    pub fn get_untyped_ref(&self, index: usize) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
+        self.get_untyped_ptr() + (index << MIN_UNTYPED_BITS)
+    }
+
+    pub fn get_untyped_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
+        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
+    }
+
+    pub fn get_untyped_is_device(&self) -> bool {
+        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
+        sign_extend((self.words[1] & 0x40) >> 6, 0x0) == 1
+    }
+
     pub fn get_tcb_ptr(&self) -> Pptr {
         assert_eq!(self.get_cap_type(), CapTag::CapThreadCap);
         sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
+    }
+
+    pub fn get_reply_tcb_ptr(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapReplyCap);
+        sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
+    }
+
+    pub fn get_handler_irq(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapIrqHandlerCap);
+        sign_extend(self.words[1] & 0xfff, 0x0)
+    }
+
+    pub fn get_asid_pool(&self) -> Pptr {
+        assert_eq!(self.get_cap_type(), CapTag::CapASIDPoolCap);
+        sign_extend((self.words[0] & 0x1fffffffff) << 2, 0xffffff8000000000)
     }
 
     pub fn set_untyped_cap_free_index(&mut self, size: usize) {
@@ -288,6 +526,14 @@ impl MDBNode {
 
     pub fn get_mdb_next(&self) -> usize {
         sign_extend(self.words[1] & 0x7ffffffffc, 0xffffff8000000000)
+    }
+
+    pub fn get_mdb_revocable(&self) -> bool {
+        sign_extend((self.words[1] & 0x2) >> 1, 0x0) == 1
+    }
+
+    pub fn get_mdb_first_badged(&self) -> bool {
+        sign_extend(self.words[1] & 0x1, 0x0) == 1
     }
 }
 

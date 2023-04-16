@@ -4,7 +4,7 @@ use crate::boot::{BootInfo, NDKS_BOOT};
 use common::config::{CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS, MAX_UNTYPED_BITS, MIN_UNTYPED_BITS, PPTR_BASE_OFFSET, WORD_BITS};
 use crate::cspace::{Cap, CapTableEntry, CapTag, create_untyped_cap};
 use common::types::{Pptr, Region, SlotPos, UntypedDesc};
-use common::utils::bit;
+use common::utils::{bit, convert_to_mut_type_ref};
 
 pub fn create_untyped_for_region(cnode_cap: Cap, is_device_mem: bool, reg: Region, first_slot: SlotPos) {
     let mut start = reg.start;
@@ -33,9 +33,7 @@ pub fn create_untyped_for_region(cnode_cap: Cap, is_device_mem: bool, reg: Regio
 pub fn provide_untyped_cap(cnode_cap: Cap, is_device_mem: bool, pptr: Pptr, size_bits: usize, first_slot: SlotPos) {
     let mut i = NDKS_BOOT.lock().slot_pos_cur - first_slot;
     if i < CONFIG_MAX_NUM_BOOT_INFO_UNTYPED_CAPS {
-        let boot_info = unsafe {
-            &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
-        };
+        let boot_info = convert_to_mut_type_ref::<BootInfo>(NDKS_BOOT.lock().boot_info_ptr);
         boot_info.untyped_list[i] = UntypedDesc::new(pptr - PPTR_BASE_OFFSET, size_bits, is_device_mem);
         let untyped_cap = create_untyped_cap(cnode_cap, NDKS_BOOT.lock().slot_pos_cur,
                                              max_free_index(size_bits), is_device_mem, size_bits, pptr);

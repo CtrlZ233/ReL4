@@ -4,20 +4,26 @@ use log::{error, debug};
 use spin::MutexGuard;
 
 use common::{config::{KERNEL_ELF_BASE, PV_BASE_OFFSET, MAX_NUM_FREEMEM_REG, AVAIL_MEM_DEVICE, MAX_NUM_RESV_REG, PPTR_BASE_OFFSET}};
+use common::config::{PHYS_BASE_RAW, PPTR_BASE};
 use super::{RES_REG, NDKS_BOOT, AVAIL_REG, AVAIL_P_REGS, ndks_boot::NdksBoot};
 use common::types::{Region, PhyRegion};
 
 
 pub fn init(ui_reg: Region) {
-    let mut index = 1;
+    let mut index = 2;
     let mut res_reg = RES_REG.lock();
-    res_reg[0].start = KERNEL_ELF_BASE - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
+    // sbi region
+    res_reg[0].start = PPTR_BASE + PHYS_BASE_RAW;
+    res_reg[0].end = KERNEL_ELF_BASE - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
+    // kernel region
+    res_reg[1].start = KERNEL_ELF_BASE - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
     extern "C" {
         fn kernel_end();
     }
-    res_reg[0].end = kernel_end as usize - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
+    res_reg[1].end = kernel_end as usize - PV_BASE_OFFSET + PPTR_BASE_OFFSET;
     res_reg[index] = ui_reg;
     index += 1;
+
 
     for i in 0..index {
         debug!("reserved_{}: {:#x} ... {:#x}", i, res_reg[i].start, res_reg[i].end);

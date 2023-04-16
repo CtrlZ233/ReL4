@@ -20,7 +20,6 @@ pub fn call_with_mrs(dest: usize, msg_info: MessageInfo, mr0: &mut usize, mr1: &
     let mut msg3 = *mr3;
     syscall::sysc_send_recv(SYS_CALL, dest, &mut local_dest, msg_info.words[0], &mut info.words[0],
                             &mut msg0, &mut msg1, &mut msg2, &mut msg3);
-
     *mr0 = msg0;
     *mr1 = msg1;
     *mr2 = msg2;

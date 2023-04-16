@@ -52,11 +52,11 @@ pub fn main() -> i32 {
         }
     }
 
-    assert!(parent_untyped != 0);
+    assert_ne!(parent_untyped, 0);
 
     let error = untyped_retype(parent_untyped, ObjectType::TCBObject as usize, 0,
         CNodeSlot::SeL4CapInitThreadCNode as usize, 0, 0, child_tcb, 1);
-
+    assert_eq!(error, 0);
     tcb_suspend(CNodeSlot::SeL4CapInitThreadTcb as usize);
     0
 }

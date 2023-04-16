@@ -31,6 +31,11 @@ pub fn is_aligned(n: usize, b: usize) -> bool {
 }
 
 #[inline]
+pub fn aligned_up(base_value: usize, alignment: usize) -> usize {
+    (base_value + (bit(alignment) - 1)) & !mask(alignment)
+}
+
+#[inline]
 pub fn round_down(n: usize, b: usize) -> usize {
     (n >> b) << b
 }
@@ -61,6 +66,7 @@ pub fn sign_extend(ret: usize, sign: usize) -> usize {
 #[inline]
 pub fn page_bits_for_size(page_size: usize) -> usize {
     // TODO: different page size
+    assert!(page_size == 0);
     return PAGE_BITS;
 }
 
@@ -79,4 +85,19 @@ pub fn invert_l1_index(index: usize) -> usize {
     let invert = L2_BITMAP_SIZE - 1 - index;
     assert!(invert < L2_BITMAP_SIZE);
     invert
+}
+#[inline]
+pub fn convert_to_mut_type_ref<T>(addr: usize) -> &'static mut T {
+    assert_ne!(addr, 0);
+    unsafe {
+        &mut *(addr as *mut T)
+    }
+}
+
+#[inline]
+pub fn convert_to_type_ref<T>(addr: usize) -> &'static T {
+    assert_ne!(addr, 0);
+    unsafe {
+        & *(addr as *mut T)
+    }
 }

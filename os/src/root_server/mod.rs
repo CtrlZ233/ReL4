@@ -14,7 +14,7 @@ use common::types::CNodeSlot;
 use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry, ASIDPool};
 use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX, create_idle_thread, create_initial_thread, init_core_state};
 use common::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
-use common::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down, bit}; 
+use common::utils::{get_lvl_page_size, get_lvl_page_size_bits, round_down, bit, convert_to_mut_type_ref};
 
 use self::root_server::RootServer;
 
@@ -96,8 +96,10 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
     map_frame_cap(it_vspace_cap, bi_frame_cap);
 
     let boot_info = unsafe {
-        &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
+        convert_to_mut_type_ref::<BootInfo>(NDKS_BOOT.lock().boot_info_ptr)
     };
+
+
     match maybe_create_extra_bi_frame_cap(root_cnode_cap, it_vspace_cap, extra_bi_size, extra_bi_frame_vptr) {
         None => {}
         Some(region) => {
@@ -116,10 +118,8 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
 
     let it_ap_cap = create_asid_pool_cap(root_cnode_cap, IT_ASID, ROOT_SERVER.lock().asid_pool);
     create_asid_control_cap(root_cnode_cap);
-    unsafe {
-        let asid_pool =  &mut *(it_ap_cap.get_cap_pptr() as *mut ASIDPool);
-        asid_pool.write(IT_ASID, it_vspace_cap.get_cap_pptr());
-    }
+    let asid_pool = convert_to_mut_type_ref::<ASIDPool>(it_ap_cap.get_cap_pptr());
+    asid_pool.write(IT_ASID, it_vspace_cap.get_cap_pptr());
     (root_cnode_cap, it_vspace_cap, ipc_buf_cap)
 }
 
@@ -156,9 +156,7 @@ fn create_frame_caps_of_region(root_cnode_cap: Cap,vspace_cap: Cap, reg: Region,
 
 
 fn create_it_address_space(root_cnode_cap: Cap, it_v_reg: VirtRegion) -> Option<Cap> {
-    let vspace = unsafe {
-        &mut *(ROOT_SERVER.lock().vspace as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
-    };
+    let vspace = convert_to_mut_type_ref::<[PageTableEntry; ROOT_PAGE_TABLE_SIZE]>(ROOT_SERVER.lock().vspace);
     copy_global_mappings(vspace);
     let vspace_ptr = ROOT_SERVER.lock().vspace;
     let lvl1pt_cap = create_page_table_cap(root_cnode_cap,
@@ -178,9 +176,7 @@ fn create_it_address_space(root_cnode_cap: Cap, it_v_reg: VirtRegion) -> Option<
     }
 
     let slot_after = NDKS_BOOT.lock().slot_pos_cur;
-    let bi_frame = unsafe {
-        &mut *(NDKS_BOOT.lock().boot_info_ptr as *mut BootInfo)
-    };
+    let bi_frame = convert_to_mut_type_ref::<BootInfo>(NDKS_BOOT.lock().boot_info_ptr);
     bi_frame.user_image_paging = SlotRegion {
         start: slot_before,
         end: slot_after,
@@ -200,9 +196,7 @@ fn populate_bi_frame(node_id: NodeId, num_nodes: usize, ipc_buf_vptr: Vptr, extr
         (start as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
     }
 
-    let boot_info = unsafe {
-        &mut *(ROOT_SERVER.lock().boot_info as *mut BootInfo)
-    };
+    let boot_info = convert_to_mut_type_ref::<BootInfo>(ROOT_SERVER.lock().boot_info);
     boot_info.node_id = node_id;
     boot_info.num_nodes = num_nodes;
     boot_info.num_io_pt_levels = 0;

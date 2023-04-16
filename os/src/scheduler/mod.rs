@@ -28,7 +28,7 @@ use crate::scheduler::domain_schedule::{KS_CUR_DOMAIN, KS_DOMAIN_TIME, PriorityC
 use crate::scheduler::tcb::TCBCNode;
 use crate::scheduler::tcb::ThreadStateEnum::ThreadStateRunning;
 use common::types::Vptr;
-use common::utils::{hart_id, prio_2_l1_index, invert_l1_index, bit, mask, l1_index_2_prio};
+use common::utils::{hart_id, prio_2_l1_index, invert_l1_index, bit, mask, l1_index_2_prio, convert_to_mut_type_ref, convert_to_type_ref};
 
 use self::tcb::TCBQueue;
 lazy_static!{
@@ -61,7 +61,7 @@ pub fn create_idle_thread() {
             pptr = &KS_IDLE_THREAD_TCB[i] as *const IdleTCB as Pptr;
             KS_IDLE_THREAD[i] = pptr + TCB_OFFSET;
             debug!("KS_IDLE_THREAD[i]: {:#x}", KS_IDLE_THREAD[i]);
-            let tcb = &mut *(KS_IDLE_THREAD[i] as *mut TCB);
+            let tcb = convert_to_mut_type_ref::<TCB>(KS_IDLE_THREAD[i]);
             tcb.configure_idle_thread();
         }
     }
@@ -78,9 +78,7 @@ pub fn idle_thread() {
 pub fn create_initial_thread(root_cnode_cap: Cap, vspace_cap: Cap, v_entry: Vptr, bi_frame_vptr: Vptr,
                              ipc_buf_vptr: Vptr, ipc_buf_cap: Cap) -> *const TCB {
     debug!("root_server_tcb pptr: {:#x}", ROOT_SERVER.lock().tcb);
-    let tcb = unsafe {
-        &mut *((ROOT_SERVER.lock().tcb + TCB_OFFSET) as *mut TCB)
-    };
+    let tcb = convert_to_mut_type_ref::<TCB>(ROOT_SERVER.lock().tcb + TCB_OFFSET);
 
     let start = ROOT_SERVER.lock().tcb;
     let end = start + bit(SEL4_TCB_BITS);
@@ -88,18 +86,14 @@ pub fn create_initial_thread(root_cnode_cap: Cap, vspace_cap: Cap, v_entry: Vptr
 
     tcb.init_context();
     
-    let root_cnode = unsafe {
-        &mut *(root_cnode_cap.get_cap_pptr() as *mut CNode)
-    };
+    let root_cnode = convert_to_mut_type_ref::<CNode>(root_cnode_cap.get_cap_pptr());
     let (derive_ret, new_cap) = derive_cap(&mut root_cnode[SeL4CapInitThreadIpcBuffer as usize], ipc_buf_cap);
     if !derive_ret {
         error!("Failed to derive copy of IPC Buffer");
         assert_eq!(1, 0);
     }
 
-    let tcb_cnode = unsafe {
-        &mut *(ROOT_SERVER.lock().tcb as *mut TCBCNode)
-    };
+    let tcb_cnode = convert_to_mut_type_ref::<TCBCNode>(ROOT_SERVER.lock().tcb);
 
     cte_insert(root_cnode_cap, &mut root_cnode[SeL4CapInitThreadCNode as usize],
                &mut tcb_cnode[TCBCNodeIndex::TCBCTable as usize]);
@@ -163,7 +157,7 @@ pub fn schedule() {
     unsafe {
         if KS_SCHEDULER_ACTION[hart_id()] != SCHEDULER_ACTION_RESUME_CURRENT_THREAD {
             let mut was_runable = false;
-            let ks_cur_thread = &mut *(KS_CUR_THREAD[hart_id()] as *mut TCB);
+            let ks_cur_thread = get_current_mut_tcb();
             if ks_cur_thread.is_schedulable() {
                 was_runable = true;
                 ks_cur_thread.enqueue_to_sched();
@@ -186,10 +180,15 @@ pub fn schedule() {
     }
 }
 
+pub fn set_thread_state(ts: ThreadStateEnum) {
+    let cur_tcb = get_current_mut_tcb();
+    cur_tcb.set_thread_state(ts);
+}
+
 pub fn re_schedule() {
     unsafe {
         if KS_SCHEDULER_ACTION[hart_id()] != SCHEDULER_ACTION_RESUME_CURRENT_THREAD && KS_SCHEDULER_ACTION[hart_id()] != SCHEDULER_ACTION_CHOOSE_NEW_THREAD {
-            let tcb = &mut *(KS_SCHEDULER_ACTION[hart_id()] as *mut TCB);
+            let tcb = convert_to_mut_type_ref::<TCB>(KS_SCHEDULER_ACTION[hart_id()]);
             tcb.enqueue_to_sched();
         }
         KS_SCHEDULER_ACTION[hart_id()] = SCHEDULER_ACTION_CHOOSE_NEW_THREAD;
@@ -197,9 +196,7 @@ pub fn re_schedule() {
 }
 
 pub fn activate_thread() {
-    let tcb = unsafe {
-        &mut *(KS_CUR_THREAD[hart_id()] as *mut TCB)
-    };
+    let tcb = get_current_mut_tcb();
     match tcb.get_state() {
         ThreadStateEnum::ThreadStateRestart => {
             let pc = tcb.get_restart_pc();
@@ -217,9 +214,7 @@ pub fn activate_thread() {
 }
 
 pub fn set_vm_root(tcb: & TCB) {
-    let tcb_cnode = unsafe {
-        &mut *(tcb.get_cnode_ptr_of_this() as *mut TCBCNode)
-    };
+    let tcb_cnode = convert_to_mut_type_ref::<TCBCNode>(tcb.get_cnode_ptr_of_this());
 
     let thread_root = tcb_cnode[TCBVTable as usize].cap;
     if thread_root.get_cap_type() != CapPageTableCap {
@@ -243,7 +238,7 @@ pub fn switch_to_thread(tcb: &mut TCB) {
 
 pub fn switch_to_idle() {
     let idle = unsafe {
-        &mut *(KS_IDLE_THREAD[hart_id()] as *mut TCB)
+        convert_to_mut_type_ref::<TCB>(KS_IDLE_THREAD[hart_id()])
     };
     switch_to_thread(idle);
     unsafe {
@@ -253,13 +248,13 @@ pub fn switch_to_idle() {
 
 pub fn get_current_tcb() -> &'static TCB {
     unsafe {
-        &*(KS_CUR_THREAD[hart_id()] as *const TCB)
+        convert_to_type_ref::<TCB>(KS_CUR_THREAD[hart_id()])
     }
 }
 
 pub fn get_current_mut_tcb() -> &'static mut TCB {
     unsafe {
-        &mut *(KS_CUR_THREAD[hart_id()] as *mut TCB)
+        convert_to_mut_type_ref::<TCB>(KS_CUR_THREAD[hart_id()])
     }
 }
 

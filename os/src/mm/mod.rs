@@ -117,15 +117,16 @@ pub fn copy_global_mappings(newLvl1pt: &mut [PageTableEntry; ROOT_PAGE_TABLE_SIZ
 
 pub fn map_it_pt_cap(vspace_cap: Cap, pt_cap: Cap) {
     let vptr = pt_cap.get_pt_mapped_addr();
-    let lvl1pt = unsafe {
-        &mut *(vspace_cap.get_cap_pptr() as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
-    };
+    // let lvl1pt = unsafe {
+    //     &mut *(vspace_cap.get_cap_pptr() as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
+    // };
+
+    let lvl1pt = convert_to_mut_type_ref::<[PageTableEntry; ROOT_PAGE_TABLE_SIZE]>(vspace_cap.get_cap_pptr());
     let pt = pt_cap.get_cap_pptr();
 
     let (_, pte_pptr) = look_up_pt_slot(lvl1pt, vptr);
-    let target_slot = unsafe {
-        &mut *(pte_pptr as *mut PageTableEntry)
-    };
+
+    let target_slot = convert_to_mut_type_ref::<PageTableEntry>(pte_pptr);
 
     *target_slot = PageTableEntry::new((pt - PPTR_BASE_OFFSET) >> PAGE_BITS, 0, PTEFlags::V);
     unsafe {
@@ -134,17 +135,13 @@ pub fn map_it_pt_cap(vspace_cap: Cap, pt_cap: Cap) {
 }
 
 pub fn map_frame_cap(vspace_cap: Cap, cap: Cap) {
-    let lvl1pt = unsafe {
-        &mut *(vspace_cap.get_cap_pptr() as *mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE])
-    };
+    let lvl1pt = convert_to_mut_type_ref::<[PageTableEntry; ROOT_PAGE_TABLE_SIZE]>(vspace_cap.get_cap_pptr());
     let frame_pptr = cap.get_cap_pptr();
     let frame_vptr = cap.get_frame_mapped_addr();
     // debug!("frame_pptr: {:#x}, frame_vptr: {:#x}", frame_pptr, frame_vptr);
     let (pt_bits_left, pte_pptr) = look_up_pt_slot(lvl1pt, frame_vptr);
     assert_eq!(pt_bits_left, PAGE_BITS);
-    let target_slot = unsafe {
-        &mut *(pte_pptr as *mut PageTableEntry)
-    };
+    let target_slot = convert_to_mut_type_ref::<PageTableEntry>(pte_pptr);
     let flag = PTEFlags::D | PTEFlags::A | PTEFlags::U | PTEFlags::R | PTEFlags::W | PTEFlags::X | PTEFlags::V;
     *target_slot = PageTableEntry::new((frame_pptr - PPTR_BASE_OFFSET) >> PAGE_BITS, 0, flag);
     unsafe {

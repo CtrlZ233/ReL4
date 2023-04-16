@@ -1,3 +1,4 @@
+use crate::config::SEL4_TCB_BITS;
 use super::config::{PPTR_BASE_OFFSET, NUM_ASID_POOL_BITS, ASID_POOL_INDEX_BITS, SEL4_MSG_MAX_LEN, SEL4_MSG_MAX_EXTRA_CAPS};
 use super::utils::bool2usize;
 use super::message::MessageInfo;
@@ -117,11 +118,35 @@ pub struct IpcBuffer {
     pub receive_depth: usize,
 }
 
+#[derive(PartialEq, Eq, Ord, PartialOrd, Copy, Clone, Debug)]
 pub enum ObjectType {
     UntypedObject = 0,
     TCBObject = 1,
     EndpointObject = 2,
     NotificationObject = 3,
     CapTableObject = 4,
-    ObjectTypeCount = 5,
+    NonArchObjectTypeCount = 5,
+    RISCV_4KPage = 6,
+    RISCV_MegaPage = 7,
+    RISCV_PageTableObject = 8,
+    ObjectTypeCount = 9,
+}
+
+impl ObjectType {
+    pub fn from_usize(t: usize) -> Self {
+        unsafe {
+            core::mem::transmute::<u8, ObjectType>(t as u8)
+        }
+    }
+
+    pub fn is_frame_type(&self) -> bool {
+        match self {
+            Self::RISCV_4KPage | Self::RISCV_MegaPage => {
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
 }

@@ -83,3 +83,13 @@ pub const VM_READ_WRITE: usize = 3;
 
 pub const NUM_READY_QUEUES: usize = CONFIG_NUM_DOMAINS * CONFIG_NUM_PRIORITIES;
 pub const L2_BITMAP_SIZE: usize = (CONFIG_NUM_PRIORITIES + WORD_BITS - 1) / WORD_BITS;
+
+pub const MSG_MAX_EXTRA_CAP_BITS: usize = 2;
+pub const MSG_MAX_EXTRA_CAPS: usize = (1 << MSG_MAX_EXTRA_CAP_BITS) - 1;
+
+pub const SEL4_ENDPOINT_BITS: usize = 4;
+pub const SEL4_NOTIFICATION_BITS: usize = 5;
+
+pub const CONFIG_RETYPE_FAN_OUT_LIMIT: usize = 256;
+
+pub const CONFIG_RESET_CHUNK_BITS: usize = 8;

@@ -1,8 +1,8 @@
 use log::{debug, error};
-use common::config::{CONFIG_ROOT_CNODE_SIZE_BITS, IT_ASID, SEL4_WORD_BITS, WORD_RADIX};
+use common::config::{CONFIG_ROOT_CNODE_SIZE_BITS, IT_ASID, SEL4_WORD_BITS, WORD_BITS, WORD_RADIX};
 use common::types::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
 use crate::root_server::ROOT_SERVER;
-use common::types::{ASIDSizeConstants, SlotPos, Pptr, Vptr, VmRights::VMReadWrite, CNodeSlot};
+use common::types::{ASIDSizeConstants, SlotPos, Pptr, Vptr, VmRights::VMReadWrite, CNodeSlot, Cptr};
 
 mod cnode;
 mod cap;
@@ -166,3 +166,26 @@ pub fn resolve_address_bits(node_cap: Cap, cap_ptr: usize, n_bits: usize) -> Opt
     None
 }
 
+pub fn lookup_slot_for_cnode_op(_is_source: bool, root: Cap, cap_ptr: Cptr, depth: usize) -> Option<*mut CapTableEntry> {
+    if root.get_cap_type() != CapCNodeCap || depth < 1 || depth > WORD_BITS {
+        return None;
+    }
+
+    resolve_address_bits(root, cap_ptr, depth)
+}
+
+pub fn lookup_target_slot(root: Cap, cap_ptr: Cptr, depth: usize) -> Option<*mut CapTableEntry> {
+    lookup_slot_for_cnode_op(false, root, cap_ptr, depth)
+}
+
+pub fn insert_new_cap(parent: &mut CapTableEntry, slot: &mut CapTableEntry, cap: Cap) {
+    let next = parent.mdb_node.get_mdb_next();
+    slot.cap = cap;
+    slot.mdb_node = MDBNode::new(next, true, true, parent as *mut CapTableEntry as usize);
+    if next != 0 {
+        unsafe {
+            (&mut *(next as *mut CapTableEntry)).mdb_node.set_mdb_prev(slot as *mut CapTableEntry as usize);
+        }
+    }
+    parent.mdb_node.set_mdb_next(slot as *mut CapTableEntry as usize);
+}

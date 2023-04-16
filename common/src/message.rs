@@ -5,7 +5,7 @@ pub const NUM_EXCEPTION_MSG: usize = 2;
 pub const NUM_SYSCALL_MSG: usize = 10;
 
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct MessageInfo {
     pub words: [usize; 1],
 }
