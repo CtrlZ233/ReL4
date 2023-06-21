@@ -1,6 +1,6 @@
 use core::ops::{Index, IndexMut};
 use common::config::CONFIG_ROOT_CNODE_SIZE_BITS;
-use crate::cspace::cap::{Cap, CapTableEntry, MDBNode};
+use crate::cspace::{cap::{Cap, CapTableEntry}, mdb::MDBNode};
 use common::utils::bit;
 
 pub struct CNode {

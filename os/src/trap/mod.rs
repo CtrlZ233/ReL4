@@ -1,5 +1,5 @@
 use core::arch::{asm, global_asm};
-use log::debug;
+use log::{error, debug};
 use crate::sbi;
 use crate::scheduler::{KS_CUR_THREAD, TCB};
 use common::utils::hart_id;
@@ -87,6 +87,7 @@ pub fn rust_handle_syscall(cptr: usize, msg_info: usize, syscall: isize) -> ! {
 
     // debug!("hello handle_syscall: cptr: {}, msg_info: {}, inner_syscall: {}", cptr, msg_info, inner_syscall);
     inner_syscall::slowpath(syscall);
+    error!("[kernel: rust_handle_syscall] unreachable!");
     sbi::shutdown(false)
 }
 

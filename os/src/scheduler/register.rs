@@ -24,7 +24,7 @@ pub const TLS_BASE: usize = TP;
 
 pub const CAP_REGISTER: usize = 9;
 pub const BADGE_REGISTER: usize = 9;
-pub const MSG_INFO_REGISTER: usize =10;
+pub const MSG_INFO_REGISTER: usize = 10;
 
 pub const SSTATUS_SPP: usize = 0x00000100;
 pub const SSTATUS_FS: usize = 0x00006000;

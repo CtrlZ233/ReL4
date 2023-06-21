@@ -12,6 +12,7 @@
 #![no_main]
 #![feature(panic_info_message)]
 #![feature(stdsimd)]
+#![feature(core_intrinsics)]
 #[macro_use]
 extern crate bitflags;
 
@@ -35,6 +36,7 @@ mod ipc;
 mod untyped;
 mod trap;
 mod inner_syscall;
+mod object;
 
 
 global_asm!(include_str!("entry.asm"));

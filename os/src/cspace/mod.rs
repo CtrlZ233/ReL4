@@ -6,14 +6,17 @@ use common::types::{ASIDSizeConstants, SlotPos, Pptr, Vptr, VmRights::VMReadWrit
 
 mod cnode;
 mod cap;
-
-pub use cap::{Cap, CapTag, CapTableEntry, MDBNode};
+mod cap_data;
+mod cap_fn;
+mod mdb;
+pub use cap::{Cap, CapTag, CapTableEntry};
 pub use cnode::{CNode, TCBCNodeIndex};
 use crate::boot::NDKS_BOOT;
 use crate::cspace::cap::{is_cap_revocable};
 use crate::cspace::CapTag::CapCNodeCap;
 use crate::untyped::set_untyped_cap_as_full;
 use common::utils::{bit, mask};
+pub use mdb::MDBNode;
 
 pub fn create_root_cnode() -> Cap {
     let cap = Cap::new_cnode_cap(CONFIG_ROOT_CNODE_SIZE_BITS,
@@ -94,7 +97,7 @@ pub fn derive_cap(slot: &mut CapTableEntry, cap: Cap) -> (bool, Cap) {
     return match cap.get_cap_type() {
         CapTag::CapFrameCap => {
             let mut new_cap = cap;
-            new_cap.frame_cap_set_frame_mapped_address(0);
+            new_cap.set_frame_mapped_address(0);
             (true, new_cap)
         }
         _ => {
@@ -129,12 +132,12 @@ pub fn cte_insert(new_cap: Cap, src_slot: &mut CapTableEntry, dest_slot: &mut Ca
 
 pub fn resolve_address_bits(node_cap: Cap, cap_ptr: usize, n_bits: usize) -> Option<*mut CapTableEntry> {
     if node_cap.get_cap_type() != CapCNodeCap {
-        debug!("cptr: {}, type: {:?}", cap_ptr, node_cap.get_cap_type());
+        error!("cptr: {}, type: {:?}", cap_ptr, node_cap.get_cap_type());
         return None;
     }
     let mut local_n_bits = n_bits;
     let mut local_node_cap = node_cap;
-    while true {
+    loop {
         let radix_bits = local_node_cap.get_cnode_radix();
         let guard_bits = local_node_cap.get_cnode_guard_size();
         let level_bits = radix_bits + guard_bits;
@@ -163,7 +166,6 @@ pub fn resolve_address_bits(node_cap: Cap, cap_ptr: usize, n_bits: usize) -> Opt
             return Some(slot as *mut CapTableEntry);
         }
     }
-    None
 }
 
 pub fn lookup_slot_for_cnode_op(_is_source: bool, root: Cap, cap_ptr: Cptr, depth: usize) -> Option<*mut CapTableEntry> {

@@ -1,16 +1,15 @@
-use common::config::{CONFIG_RESET_CHUNK_BITS, MIN_UNTYPED_BITS, ROOT_PAGE_TABLE_SIZE, SEL4_ASID_POOL_BITS, SEL4_ENDPOINT_BITS, SEL4_NOTIFICATION_BITS, SEL4_PAGE_BITS, SEL4_SLOT_BITS, SEL4_TCB_BITS};
-use common::types::{Pptr, Vptr};
-use common::utils::{bit, bool2usize, mask, page_bits_for_size, round_down, sign_extend};
+use common::config::{CONFIG_RESET_CHUNK_BITS, MIN_UNTYPED_BITS, SEL4_ASID_POOL_BITS, SEL4_ENDPOINT_BITS,
+    SEL4_NOTIFICATION_BITS, SEL4_PAGE_BITS, SEL4_SLOT_BITS, SEL4_TCB_BITS, WORD_BITS};
+use common::types::Pptr;
+use common::utils::{bit, mask, page_bits_for_size, round_down, convert_to_mut_type_ref};
 use log::debug;
+
+use super::cap_data::CapData;
+use super::mdb::MDBNode;
 
 #[derive(Clone, Copy)]
 pub struct Cap {
-    words: [usize; 2],
-}
-
-#[derive(Copy, Clone)]
-pub struct MDBNode {
-    words:[usize; 2]
+    pub words: [usize; 2],
 }
 
 #[derive(Copy, Clone)]
@@ -42,7 +41,7 @@ impl CapTableEntry {
         let block_size = prev_cap.get_untyped_cap_block_size();
         let region_base = prev_cap.get_untyped_ptr();
         let chunk = CONFIG_RESET_CHUNK_BITS;
-        let mut offset = prev_cap.get_untyped_free_index() << MIN_UNTYPED_BITS;
+        let offset = prev_cap.get_untyped_free_index() << MIN_UNTYPED_BITS;
         let device_mem = prev_cap.get_untyped_is_device();
         if offset == 0 {
             return true;
@@ -50,22 +49,17 @@ impl CapTableEntry {
         if device_mem || block_size < chunk {
             if !device_mem {
                 let end = region_base + bit(block_size);
-                unsafe {
-                    (region_base as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
-                }
+                (region_base as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
             }
             self.cap.set_untyped_cap_free_index(0);
         } else {
             let mut local_offset = round_down(offset - 1, chunk);
             debug!("local_offset: {}, region_base: {:#x}", local_offset, region_base);
             let stride = bit(chunk);
-            while true {
+            loop {
                 let start = region_base + local_offset;
                 let end = region_base + bit(chunk);
-                assert!(start >= 0);
-                unsafe {
-                    (start as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
-                }
+                (start as usize..end as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
                 self.cap.set_untyped_cap_free_index((local_offset as usize) >> MIN_UNTYPED_BITS);
                 // TODO: preemption point
                 local_offset -= stride;
@@ -110,6 +104,38 @@ impl CapTableEntry {
 
         true
     }
+
+    pub fn is_final_cap(&self) -> bool {
+        let mdb = self.mdb_node;
+        let prev_is_same_obj;
+        if mdb.get_mdb_prev() == 0 {
+            prev_is_same_obj = false;
+        } else {
+            let prev = convert_to_mut_type_ref::<CapTableEntry>(mdb.get_mdb_prev());
+            prev_is_same_obj = prev.cap.same_obj_as(&self.cap);
+        }
+
+        if prev_is_same_obj {
+            return false;
+        } else {
+            if mdb.get_mdb_next() == 0 {
+                return true;
+            } else {
+                let next = convert_to_mut_type_ref::<CapTableEntry>(mdb.get_mdb_next());
+                return !self.cap.same_obj_as(&next.cap);
+            }
+        }
+    }
+
+    pub fn is_long_running_delete(&self) -> bool {
+        if self.cap.get_cap_type() == CapTag::CapNullCap || !self.is_final_cap() {
+            return false;
+        }
+        match self.cap.get_cap_type() {
+            CapTag::CapThreadCap | CapTag::CapZombieCap | CapTag::CapCNodeCap => true,
+            _ => false
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -136,6 +162,50 @@ impl Cap {
         unsafe {
             core::mem::transmute::<u8, CapTag>(((self.words[0] >> 59) & 0x1f) as u8)
         }
+    }
+
+    pub fn update_cap_data(&mut self, preserve: bool, new_data: usize) {
+        match self.get_cap_type() {
+            CapTag::CapEndpointCap => {
+                if !preserve && self.get_ep_badge() == 0 {
+                    self.set_ep_badge(new_data);
+                }
+            }
+
+            CapTag::CapNotificationCap => {
+                if !preserve && self.get_nt_fn_badge() == 0 {
+                    self.set_nt_fn_badge(new_data);
+                }
+            }
+
+            CapTag::CapCNodeCap => {
+                let w = CapData::new(new_data);
+                let guard_size = w.get_guard_size();
+                if guard_size +  self.get_cnode_radix() <= WORD_BITS {
+                    let guard = w.get_guard() & mask(guard_size);
+                    self.set_cnode_guard(guard);
+                    self.set_cnode_guard_size(guard_size);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn same_obj_as(&self, other: &Self) -> bool {
+        if self.get_cap_type() == CapTag::CapUntypedCap {
+            return false;
+        }
+
+        if self.get_cap_type() == CapTag::CapIrqControlCap && other.get_cap_type() == CapTag::CapIrqHandlerCap {
+            return false;
+        }
+
+        if self.get_cap_type() == CapTag::CapFrameCap && other.get_cap_type() == CapTag::CapFrameCap {
+            return self.get_frame_base_ptr() == other.get_frame_base_ptr() &&
+                    self.get_frame_size() == other.get_frame_size() &&
+                    self.get_frame_is_device() == other.get_frame_is_device();
+        }
+        return self.same_region_as(other);
     }
 
     pub fn same_region_as(&self, other: &Self) -> bool {
@@ -180,7 +250,7 @@ impl Cap {
 
             CapTag::CapIrqHandlerCap => {
                 if other.get_cap_type() == CapTag::CapIrqHandlerCap {
-                    return self.get_handler_irq() == other.get_handler_irq();
+                    return self.get_irq_handler() == other.get_irq_handler();
                 }
             }
 
@@ -242,300 +312,9 @@ impl Cap {
             _ => 0,
         }
     }
-
-    pub fn get_cnode_radix(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
-        sign_extend((self.words[0] & 0x1f800000000000) >> 47, 0x0)
-    }
-
-    pub fn get_cnode_guard_size(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
-        sign_extend((self.words[0] & 0x7e0000000000000) >> 53, 0x0)
-    }
-
-    pub fn get_cnode_guard(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
-        sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
-    }
-
-    pub fn get_cnode_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapCNodeCap);
-        sign_extend((self.words[0] & 0x3fffffffff) << 1, 0xffffff8000000000)
-    }
-
-    pub fn get_pt_mapped_addr(&self) -> Vptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
-        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
-    }
-
-    pub fn get_pt_mapped_asid(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
-        sign_extend((self.words[1] & 0xffff000000000000) >> 48, 0x0)
-    }
-
-    pub fn get_pt_based_ptr(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
-        sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000)
-    }
-
-    pub fn get_frame_mapped_addr(&self) -> Vptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
-    }
-
-    pub fn get_frame_base_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        sign_extend((self.words[1] & 0xfffffffffe00) >> 9, 0xffffff8000000000)
-    }
-
-    pub fn get_frame_size(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        sign_extend((self.words[0] & 0x600000000000000) >> 57, 0x0)
-    }
-
-    pub fn get_frame_is_device(&self) -> bool {
-        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        sign_extend((self.words[0] & 0x40000000000000) >> 54, 0x0) == 1
-    }
-
-    pub fn get_frame_frame_vm_right(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        sign_extend((self.words[0] & 0x180000000000000) >> 55, 0x0)
-    }
-
-    pub fn get_ep_badge(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapEndpointCap);
-        sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
-    }
-
-    pub fn get_ep_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapEndpointCap);
-        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
-    }
-
-    pub fn get_nt_fn_badge(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapNotificationCap);
-        sign_extend(self.words[1] & & 0xffffffffffffffff, 0x0)
-    }
-
-    pub fn get_nt_fn_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapNotificationCap);
-        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
-    }
-
-    pub fn get_untyped_cap_block_size(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
-        sign_extend(self.words[1] & 0x3f, 0x0)
-    }
-
-    pub fn get_untyped_free_index(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
-        sign_extend((self.words[1] & 0xfffffffffe000000) >> 25, 0x0)
-    }
-
-    pub fn get_untyped_ref(&self, index: usize) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
-        self.get_untyped_ptr() + (index << MIN_UNTYPED_BITS)
-    }
-
-    pub fn get_untyped_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
-        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
-    }
-
-    pub fn get_untyped_is_device(&self) -> bool {
-        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
-        sign_extend((self.words[1] & 0x40) >> 6, 0x0) == 1
-    }
-
-    pub fn get_tcb_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapThreadCap);
-        sign_extend(self.words[0] & 0x7fffffffff, 0xffffff8000000000)
-    }
-
-    pub fn get_reply_tcb_ptr(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapReplyCap);
-        sign_extend(self.words[1] & 0xffffffffffffffff, 0x0)
-    }
-
-    pub fn get_handler_irq(&self) -> usize {
-        assert_eq!(self.get_cap_type(), CapTag::CapIrqHandlerCap);
-        sign_extend(self.words[1] & 0xfff, 0x0)
-    }
-
-    pub fn get_asid_pool(&self) -> Pptr {
-        assert_eq!(self.get_cap_type(), CapTag::CapASIDPoolCap);
-        sign_extend((self.words[0] & 0x1fffffffff) << 2, 0xffffff8000000000)
-    }
-
-    pub fn set_untyped_cap_free_index(&mut self, size: usize) {
-        assert_eq!(self.get_cap_type(), CapTag::CapUntypedCap);
-        self.words[1] &= !0xfffffffffe000000;
-        self.words[1] |= (size << 25) & 0xfffffffffe000000;
-    }
-
-    pub fn new_cnode_cap(cap_cnode_radix: usize, cap_cnode_guard_size: usize,
-                         cap_cnode_guard: usize, cap_cnode_ptr: usize) -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (cap_cnode_radix & 0x3f) << 47
-            | (cap_cnode_guard_size & 0x3f) << 53
-            | (cap_cnode_ptr & 0x7ffffffffe) >> 1
-            | (CapTag::CapCNodeCap as usize & 0x1f) << 59;
-        cap.words[1] = 0
-            | cap_cnode_guard << 0;
-        cap
-    }
-
-    pub fn new_domain_cap() -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapDomainCap as usize & 0x1f) << 59;
-        cap.words[1] = 0;
-        cap
-    }
-
-    pub fn new_page_table_cap(cap_pt_mapped_asid: usize, cap_pt_base_ptr: usize,
-                              cap_pt_is_mapped: bool, cap_pt_mapped_address: usize) -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapPageTableCap as usize & 0x1f) << 59
-            | (bool2usize(cap_pt_is_mapped) & 0x1) << 39
-            | (cap_pt_mapped_address & 0x7fffffffff) >> 0;
-        cap.words[1] = 0
-            | (cap_pt_mapped_asid & 0xffff) << 48
-            | (cap_pt_base_ptr & 0x7fffffffff) << 9;
-        cap
-    }
-
-    pub fn new_frame_cap(cap_frame_mapped_asid: usize, cap_frame_base_ptr: usize,
-                         cap_frame_size: usize, cap_frame_vm_right: usize,
-                         cap_frame_is_device: bool, cap_frame_mapped_addr: usize) -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapFrameCap as usize & 0x1f) << 59
-            | (cap_frame_size & 0x3) << 57
-            | (cap_frame_vm_right & 0x3) << 55
-            | (bool2usize(cap_frame_is_device) & 0x1) << 54
-            | (cap_frame_mapped_addr & 0x7fffffffff) >> 0;
-
-        cap.words[1] = 0
-            | (cap_frame_mapped_asid & 0xffff) << 48
-            | (cap_frame_base_ptr & 0x7fffffffff) << 9;
-        cap
-    }
-
-    pub fn new_asid_pool_cap(cap_asid_base: usize, cap_asid_pool: usize) -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapASIDPoolCap as usize & 0x1f) << 59
-            | (cap_asid_base & 0xffff) << 43
-            | (cap_asid_pool & 0x7ffffffffc) >> 2;
-        cap
-    }
-
-    pub fn new_asid_control_cap() -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapASIDControlCap as usize & 0x1f) << 59;
-
-        cap
-    }
-
-    pub fn new_reply_cap(cap_reply_can_grant: bool, cap_reply_master: bool, cap_tcb_ptr: usize) -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapReplyCap as usize & 0x1f) << 59
-            | (bool2usize(cap_reply_can_grant) & 0x1) << 1
-            | (bool2usize(cap_reply_master) & 0x1) << 0;
-        cap.words[1] = 0
-            | cap_tcb_ptr;
-        cap
-    }
-
-    pub fn new_thread_cap(cap_tcb_ptr: usize) -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapThreadCap as usize &0x1f) << 59
-            | cap_tcb_ptr & 0x7fffffffff;
-        cap
-    }
-
-    pub fn new_untyped_cap(cap_free_index: usize, cap_is_device: bool, cap_block_size: usize, cap_ptr: usize) -> Cap {
-        let mut cap: Cap = Cap { words: [0, 0] };
-
-        cap.words[0] = 0
-            | (CapTag::CapUntypedCap as usize &0x1f) << 59
-            | cap_ptr & 0x7fffffffff;
-
-        cap.words[1] = 0
-            | (cap_free_index & 0x7fffffffff) << 25
-            | (bool2usize(cap_is_device) & 0x1) << 6
-            | cap_block_size & 0x3f;
-        cap
-    }
-
-    pub fn new_null_cap() -> Self {
-        let mut cap: Cap = Cap { words: [0, 0] };
-        cap.words[0] = 0
-            | (CapTag::CapNullCap as usize & 0x1f) << 59;
-        cap
-    }
-
-    pub fn frame_cap_set_frame_mapped_address(&mut self, addr: usize) {
-        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        self.words[0] &= !(0x7fffffffff);
-        self.words[0] |= addr & 0x7fffffffff;
-    }
 }
 
-impl MDBNode {
-    pub fn new(mdb_next: usize, mdb_revocable: bool, mdb_first_badged: bool, mdb_prev: usize) -> Self {
-        let mut mdb_node = MDBNode {words: [0, 0]};
-        mdb_node.words[0] = 0
-            | mdb_prev << 0;
-        mdb_node.words[1] = 0
-            | (mdb_next & 0x7ffffffffc) >> 0
-            | (bool2usize(mdb_revocable) & 0x1) << 1
-            | (bool2usize(mdb_first_badged) & 0x1) << 0;
-        mdb_node
-    }
-    pub fn null_mdbnode() -> Self {
-        Self::new(0, false, false, 0)
-    }
 
-    pub fn set_mdb_prev(&mut self, v64: usize) {
-        self.words[0] &= !0xffffffffffffffff;
-        self.words[0] |= v64;
-    }
-
-    pub fn set_mdb_revocable(&mut self, mdb_revocable: bool) {
-        self.words[1] &= !(0x2 as usize);
-        self.words[1] |= (bool2usize(mdb_revocable) << 1) & (0x2 as usize);
-    }
-
-    pub fn set_mdb_first_badged(&mut self, mdb_first_badged: bool) {
-        self.words[1] &= !(0x1 as usize);
-        self.words[1] |= (bool2usize(mdb_first_badged) << 0) & (0x1 as usize);
-    }
-
-    pub fn set_mdb_next(&mut self, v64: usize) {
-        self.words[1] &= !0x7ffffffffc;
-        self.words[1] |= v64 & 0x7ffffffffc;
-    }
-
-    pub fn get_mdb_next(&self) -> usize {
-        sign_extend(self.words[1] & 0x7ffffffffc, 0xffffff8000000000)
-    }
-
-    pub fn get_mdb_revocable(&self) -> bool {
-        sign_extend((self.words[1] & 0x2) >> 1, 0x0) == 1
-    }
-
-    pub fn get_mdb_first_badged(&self) -> bool {
-        sign_extend(self.words[1] & 0x1, 0x0) == 1
-    }
-}
 
 
 pub fn is_cap_revocable(derived_cap: Cap, src_cap: Cap) -> bool {

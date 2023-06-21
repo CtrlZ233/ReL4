@@ -1,20 +1,26 @@
-use common::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr, Vptr}};
-use crate::scheduler::{BADGE_REGISTER, MSG_INFO_REGISTER, re_schedule};
+use common::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr}};
+use crate::{scheduler::{BADGE_REGISTER, MSG_INFO_REGISTER, re_schedule}, cspace::MDBNode};
 use common::utils::{bit, hart_id, sign_extend, bool2usize, mask, page_bits_for_size, convert_to_mut_type_ref, convert_to_type_ref};
 use core::ops::{Index, IndexMut};
-use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD, ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap};
+use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD,
+    KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD, ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap};
 
 use log::{error, debug};
 use common::config::{SEL4_TCB_BITS, VM_READ_ONLY, VM_READ_WRITE, WORD_BITS};
 use common::message::InvocationLabel::InvalidInvocation;
 use common::message::MessageInfo;
-use crate::cspace::{Cap, CapTableEntry, CapTag, MDBNode, resolve_address_bits};
+use crate::cspace::{Cap, CapTableEntry, CapTag, resolve_address_bits};
 use crate::cspace::TCBCNodeIndex::{TCBBuffer, TCBCTable, TCBReply};
 use crate::scheduler::endpoint::{EndPoint, EndPointState};
 use crate::scheduler::Register::FaultIP;
 use crate::scheduler::register::Register::{NextIP, SSTATUS};
 use crate::scheduler::ThreadStateEnum::{ThreadStateInactive, ThreadStateRunning};
 
+pub type ThreadControlFlag = usize;
+pub const THREAD_CONTROL_UPDATE_PRIORITY: usize = 0x1;
+pub const THREAD_CONTROL_UPDATE_IPC_BUFFER: usize = 0x1;
+pub const THREAD_CONTROL_UPDATE_SPACE: usize = 0x1;
+pub const THREAD_CONTROL_UPDATE_MCP: usize = 0x1;
 
 #[derive(Default)]
 pub struct TCB {
@@ -260,11 +266,12 @@ impl TCB {
             error!("is device frame");
             return None;
         }
-        let vm_right = buffer_cap.get_frame_frame_vm_right();
-
+        let vm_right = buffer_cap.get_frame_vm_right();
+        
         if vm_right == VM_READ_WRITE || (!is_receiver && vm_right == VM_READ_ONLY) {
             let base_ptr = buffer_cap.get_frame_base_ptr();
             let page_bits = page_bits_for_size(buffer_cap.get_frame_size());
+            // error!("w_buffer_ptr: {:#x}, base_ptr: {:#x}, page_bits: {}", w_buffer_ptr, base_ptr, page_bits);
             return Some(base_ptr + (w_buffer_ptr & mask(page_bits)));
         }
 

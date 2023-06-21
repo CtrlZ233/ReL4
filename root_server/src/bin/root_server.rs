@@ -8,7 +8,7 @@ extern crate root_server;
 use core::arch::asm;
 use root_server::BootInfo;
 use user_lib::{println, thread::tcb_suspend, untyped::untyped_retype};
-use common::{types::{CNodeSlot, Cptr, IpcBuffer, ObjectType}, config::SEL4_TCB_BITS};
+use common::{types::{CNodeSlot, Cptr, IpcBuffer}, config::SEL4_TCB_BITS, object::ObjectType};
 
 static mut BOOT_INFO: usize = 0;
 static mut IPC_BUFFER: usize = 0;
@@ -58,5 +58,6 @@ pub fn main() -> i32 {
         CNodeSlot::SeL4CapInitThreadCNode as usize, 0, 0, child_tcb, 1);
     assert_eq!(error, 0);
     tcb_suspend(CNodeSlot::SeL4CapInitThreadTcb as usize);
+    println!("bye root server!");
     0
 }

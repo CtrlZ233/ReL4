@@ -10,7 +10,7 @@ use spin::Mutex;
 use common::utils::*;
 
 use common::config::{CONFIG_PT_LEVELS, PPTR_BASE, PPTR_TOP, PADDR_BASE, PPTR_BASE_OFFSET, ROOT_PAGE_TABLE_SIZE, KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PAGE_BITS, PV_BASE_OFFSET, PAGE_TABLE_INDEX_BITS};
-use crate::cspace::Cap;
+use crate::cspace::{Cap, CapTag};
 use crate::mm::page_table::PTEFlags;
 use common::types::{Pptr, Vptr, Paddr, VirtRegion};
 
@@ -163,4 +163,8 @@ pub fn look_up_pt_slot(lvl1pt: &mut [PageTableEntry], vptr: Vptr) -> (usize, Ppt
         pt_slot = &pt[(vptr >> pt_bits_left ) & mask(PAGE_TABLE_INDEX_BITS)];
     }
     (pt_bits_left, pt_slot as *const PageTableEntry as Pptr)
+}
+
+pub fn is_valid_vtable_root(cap: Cap) -> bool {
+    return cap.get_cap_type() == CapTag::CapPageTableCap && cap.get_pt_is_mapped()
 }

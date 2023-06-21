@@ -14,10 +14,11 @@ pub fn call_with_mrs(dest: usize, msg_info: MessageInfo, mr0: &mut usize, mr1: &
     -> MessageInfo {
     let mut local_dest = dest;
     let mut info = MessageInfo {words: [0; 1]};
-    let mut msg0 = *mr0;
-    let mut msg1 = *mr1;
-    let mut msg2 = *mr2;
-    let mut msg3 = *mr3;
+    let mut msg0 = if msg_info.get_label() > 0 { *mr0 } else { 0 };
+    let mut msg1 = if msg_info.get_label() > 1 { *mr1 } else { 0 };
+    let mut msg2 = if msg_info.get_label() > 2 { *mr2 } else { 0 };
+    let mut msg3 = if msg_info.get_label() > 3 { *mr3 } else { 0 };
+    
     syscall::sysc_send_recv(SYS_CALL, dest, &mut local_dest, msg_info.words[0], &mut info.words[0],
                             &mut msg0, &mut msg1, &mut msg2, &mut msg3);
     *mr0 = msg0;

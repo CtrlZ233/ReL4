@@ -6,7 +6,6 @@ pub const SYS_SEND: isize = -3;
 
 pub fn sysc_send_recv(sys: isize, dest: usize, out_badge: &mut usize, info: usize, out_info: &mut usize,
                       in_out_mr0: &mut usize, in_out_mr1: &mut usize, in_out_mr2: &mut usize, in_out_mr3: &mut usize) {
-    let mut ret: isize;
     unsafe {
         core::arch::asm!(
             "ecall",
@@ -27,10 +26,6 @@ pub fn sysc_send_recv(sys: isize, dest: usize, out_badge: &mut usize, info: usiz
         asm!("mv {}, a4", out(reg) *in_out_mr2);
         asm!("mv {}, a5", out(reg) *in_out_mr3);
     }
-
-    // TODO: out register
-    // *out_info = info;
-    // *out_badge = dest;
 }
 
 pub fn sys_put_char(v8: u8) {

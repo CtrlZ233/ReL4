@@ -12,10 +12,12 @@ use core::sync::atomic::Ordering::SeqCst;
 use spin::Mutex;
 use domain_schedule::DomainScheduler;
 
-pub use tcb::{TCB, IdleTCB, ThreadStateEnum};
+pub use tcb::{TCB, IdleTCB, ThreadStateEnum, TCBCNode, ThreadControlFlag, THREAD_CONTROL_UPDATE_PRIORITY, THREAD_CONTROL_UPDATE_IPC_BUFFER,
+    THREAD_CONTROL_UPDATE_SPACE, THREAD_CONTROL_UPDATE_MCP};
 pub use register::*;
 
-use common::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS, CONFIG_NUM_DOMAINS, CONFIG_NUM_PRIORITIES, NUM_READY_QUEUES, L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr};
+use common::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS, CONFIG_NUM_DOMAINS, NUM_READY_QUEUES,
+    L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr};
 use crate::mm::activate_kernel_vspace;
 use common::config::PPTR_BASE_OFFSET;
 use crate::cspace::{Cap, CNode, create_init_thread_cap, cte_insert, derive_cap, TCBCNodeIndex};
@@ -25,7 +27,6 @@ use crate::cspace::TCBCNodeIndex::TCBVTable;
 use crate::mm::set_vspace_root;
 use crate::root_server::ROOT_SERVER;
 use crate::scheduler::domain_schedule::{KS_CUR_DOMAIN, KS_DOMAIN_TIME, PriorityConst};
-use crate::scheduler::tcb::TCBCNode;
 use crate::scheduler::tcb::ThreadStateEnum::ThreadStateRunning;
 use common::types::Vptr;
 use common::utils::{hart_id, prio_2_l1_index, invert_l1_index, bit, mask, l1_index_2_prio, convert_to_mut_type_ref, convert_to_type_ref};

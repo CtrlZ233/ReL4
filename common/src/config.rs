@@ -36,6 +36,8 @@ pub const BI_FRAME_SIZE_BITS: usize = PAGE_BITS;
 pub const SEL4_ASID_POOL_BITS: usize = 12;
 pub const SEL4_WORD_BITS: usize = 64;
 
+pub const SEL4_IPC_BUFFER_SIZE_BITS: usize = 10;
+
 pub const SEL4_IDLE_TCB_SLOT_SIZE: usize = 1 << SEL4_TCB_BITS;
 pub const TCB_OFFSET: usize = 1 << SEL4_TCB_SIZE_BITS;
 
@@ -93,3 +95,6 @@ pub const SEL4_NOTIFICATION_BITS: usize = 5;
 pub const CONFIG_RETYPE_FAN_OUT_LIMIT: usize = 256;
 
 pub const CONFIG_RESET_CHUNK_BITS: usize = 8;
+
+
+pub const NULL_PRIO: usize = 0;
