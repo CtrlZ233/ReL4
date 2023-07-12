@@ -1,7 +1,7 @@
 use crate::sbi;
 use crate::scheduler::get_current_tcb;
-use crate::scheduler::CAP_REGISTER;
 use crate::trap::restore_user_context;
+use common::register::CAP_REGISTER;
 use log::debug;
 use crate::inner_syscall::syscall::handle_syscall;
 

@@ -1,9 +1,10 @@
+use common::register::{CAP_REGISTER, MSG_INFO_REGISTER};
 use log::error;
 use common::message::{MessageInfo, NUM_MSG_REGISTRES};
 use common::config::{MSG_MAX_EXTRA_CAPS, SEL4_MSG_MAX_LEN};
 use crate::cspace::{Cap, CapTableEntry, CapTag};
 use crate::sbi::shutdown;
-use crate::scheduler::{CAP_REGISTER, KS_CUR_THREAD, MSG_INFO_REGISTER, TCB};
+use crate::scheduler::{KS_CUR_THREAD, TCB};
 use crate::scheduler::ThreadStateEnum::{ThreadStateRestart, ThreadStateRunning};
 use common::types::Pptr;
 use common::utils::{convert_to_mut_type_ref, hart_id};
@@ -11,6 +12,7 @@ use crate::inner_syscall::CUR_EXTRA_CAPS;
 
 use super::tcb::decode_tcb_invocation;
 use super::untyped::decode_untyped_invocation;
+use super::vspace::{decode_frame_invocation, decode_page_table_invocation};
 
 pub fn handle_invocation(is_call: bool , is_blocking: bool) {
     let thread = unsafe {
@@ -22,8 +24,7 @@ pub fn handle_invocation(is_call: bool , is_blocking: bool) {
     match thread.lookup_cap_and_slot(cptr) {
         Some((cap, slot)) => {
             let buffer = thread.lookup_ipc_buffer(false);
-            let ret = look_up_extra_caps(thread, buffer, info);
-            if !ret {
+            if !look_up_extra_caps(thread, buffer, info) {
                 error!("look up extra caps failed");
                 if is_blocking {
                     error!("need to handle fault");
@@ -58,7 +59,7 @@ pub fn handle_invocation(is_call: bool , is_blocking: bool) {
     }
 }
 
-pub fn decode_invocation(inv_label: usize, length: usize, cap_index: usize, slot: &mut CapTableEntry,
+fn decode_invocation(inv_label: usize, length: usize, cap_index: usize, slot: &mut CapTableEntry,
                          cap: Cap, block: bool, call: bool, buffer: Pptr) {
     match cap.get_cap_type() {
         CapTag::CapThreadCap => {
@@ -67,13 +68,21 @@ pub fn decode_invocation(inv_label: usize, length: usize, cap_index: usize, slot
         CapTag::CapUntypedCap => {
             decode_untyped_invocation(inv_label, length, slot, cap, call, buffer);
         }
+
+        CapTag::CapFrameCap => {
+            decode_frame_invocation(inv_label, length, slot, cap, call, buffer)
+        }
+
+        CapTag::CapPageTableCap =>  {
+            decode_page_table_invocation(inv_label, length, slot, cap, buffer);
+        }
         _ => {
 
         }
     }
 }
 
-pub fn look_up_extra_caps(tcb: &mut TCB, ipc_buffer: Option<Pptr>, msg: MessageInfo) -> bool {
+fn look_up_extra_caps(tcb: &mut TCB, ipc_buffer: Option<Pptr>, msg: MessageInfo) -> bool {
     let length = msg.get_extra_caps();
     if length == 0 || ipc_buffer.is_none() {
         unsafe { CUR_EXTRA_CAPS[0] = 0; }
@@ -100,7 +109,7 @@ pub fn look_up_extra_caps(tcb: &mut TCB, ipc_buffer: Option<Pptr>, msg: MessageI
     true
 }
 
-pub fn get_extra_cap_ptr(buffer_ptr: Pptr, index: usize) -> usize {
+fn get_extra_cap_ptr(buffer_ptr: Pptr, index: usize) -> usize {
     unsafe {
         *((buffer_ptr + (core::mem::size_of::<usize>() * (SEL4_MSG_MAX_LEN + 2 + index))) as *const usize)
     }

@@ -33,6 +33,24 @@ impl Cap {
 
     pub fn get_pt_is_mapped(&self) -> bool {
         assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
-         sign_extend(self.words[0] & 0x8000000000, 0x0) == 1
+        sign_extend((self.words[0] & 0x8000000000) >> 39, 0x0) == 1
+    }
+
+    pub fn set_pt_is_mapped(&mut self, v64: usize) {
+        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
+        self.words[0] &= !0x8000000000;
+        self.words[0] |= (v64 << 39) & 0x8000000000;
+    }
+
+    pub fn set_pt_mapped_asid(&mut self, v64: usize) {
+        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
+        self.words[1] &= !0xffff000000000000;
+        self.words[1] |= (v64 << 48) & 0xffff000000000000;
+    }
+
+    pub fn set_pt_mapped_address(&mut self, v64: usize) {
+        assert_eq!(self.get_cap_type(), CapTag::CapPageTableCap);
+        self.words[0] &= !0x7fffffffff;
+        self.words[0] |= (v64 >> 0) & 0x7fffffffff;
     }
 }

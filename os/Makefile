@@ -36,7 +36,7 @@ env:
 	rustup component add rust-src
 	rustup component add llvm-tools-preview
 
-$(KERNEL_BIN): env kernel
+$(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 kernel:
@@ -48,7 +48,11 @@ kernel:
 
 clean:
 	@cd ../root_server && make clean
+	@cd ../syscall && cargo clean
+	@cd ../user_lib && cargo clean
+	@cd ../common && cargo clean
 	@cargo clean
+	
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
@@ -60,7 +64,7 @@ disasm-vim: kernel
 
 run: run-inner
 
-run-inner: build
+run-inner: env build
 	@qemu-system-riscv64 \
 		-machine virt \
 		-nographic \

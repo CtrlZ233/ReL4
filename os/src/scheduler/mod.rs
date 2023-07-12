@@ -1,10 +1,9 @@
 mod domain_schedule;
 mod tcb;
-mod register;
 mod scheduler;
 mod endpoint;
 
-use core::sync::atomic::AtomicUsize;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use lazy_static::*;
 use log::{debug, error};
 use core::arch::asm;
@@ -12,12 +11,11 @@ use core::sync::atomic::Ordering::SeqCst;
 use spin::Mutex;
 use domain_schedule::DomainScheduler;
 
-pub use tcb::{TCB, IdleTCB, ThreadStateEnum, TCBCNode, ThreadControlFlag, THREAD_CONTROL_UPDATE_PRIORITY, THREAD_CONTROL_UPDATE_IPC_BUFFER,
-    THREAD_CONTROL_UPDATE_SPACE, THREAD_CONTROL_UPDATE_MCP};
-pub use register::*;
+pub use tcb::{TCB, IdleTCB, ThreadStateEnum, TCBCNode, ThreadControlFlag, THREAD_CONTROL_UPDATE_PRIORITY,
+    THREAD_CONTROL_UPDATE_IPC_BUFFER, THREAD_CONTROL_UPDATE_SPACE, THREAD_CONTROL_UPDATE_MCP};
 
 use common::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS, CONFIG_NUM_DOMAINS, NUM_READY_QUEUES,
-    L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr};
+    L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr, register::CAP_REGISTER};
 use crate::mm::activate_kernel_vspace;
 use common::config::PPTR_BASE_OFFSET;
 use crate::cspace::{Cap, CNode, create_init_thread_cap, cte_insert, derive_cap, TCBCNodeIndex};
@@ -234,6 +232,19 @@ pub fn switch_to_thread(tcb: &mut TCB) {
     tcb.de_queue_from_sched();
     unsafe {
         KS_CUR_THREAD[hart_id()] = tcb as *const TCB as usize;
+    }
+}
+
+pub fn possible_switch_to(tcb: &mut TCB) {
+    unsafe {
+        if KS_CUR_DOMAIN.load(Ordering::SeqCst) != tcb.tcb_domain {
+            error!("[possible_switch_to] unsupported!");
+        } else if KS_SCHEDULER_ACTION[hart_id()] != SCHEDULER_ACTION_RESUME_CURRENT_THREAD {
+            re_schedule();
+            tcb.enqueue_to_sched();
+        } else {
+            KS_SCHEDULER_ACTION[hart_id()] = tcb as *mut TCB as usize;
+        }
     }
 }
 

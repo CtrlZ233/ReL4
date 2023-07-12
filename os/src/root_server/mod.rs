@@ -6,11 +6,11 @@ use lazy_static::*;
 use log::{debug, error};
 use spin::Mutex;
 use crate::cspace::{create_asid_pool_cap, create_asid_control_cap};
-use crate::boot::{BootInfo, BootInfoHeader, BootInfoID, NDKS_BOOT};
+use crate::boot::{BootInfo, BootInfoHeader, BootInfoID, NDKS_BOOT, KS_ASID_TABLE};
 use common::config::{CONFIG_MAX_NUM_NODES, CONFIG_PT_LEVELS, IT_ASID, MAX_NUM_FREEMEM_REG, PAGE_BITS, PPTR_BASE, ROOT_PAGE_TABLE_SIZE, UI_V_ENTRY,
     CONFIG_ROOT_CNODE_SIZE_BITS, SEL4_SLOT_BITS, SEL4_VSPACE_BITS, SEL4_TCB_BITS, SEL4_PAGE_BITS, BI_FRAME_SIZE_BITS, SEL4_ASID_POOL_BITS};
 use crate::cspace::{Cap, CapTag, create_bi_frame_cap, create_domain_cap, create_frame_cap, create_it_pt_cap, create_page_table_cap, create_root_cnode};
-use common::types::CNodeSlot;
+use common::types::{CNodeSlot, ASIDSizeConstants};
 use crate::mm::{copy_global_mappings, get_n_paging, map_frame_cap, map_it_pt_cap, PageTableEntry, ASIDPool};
 use crate::scheduler::{KS_DOM_SCHEDULE, KS_DOM_SCHEDULE_IDX, create_idle_thread, create_initial_thread, init_core_state};
 use common::types::{NodeId, Pptr, Vptr, SlotRegion, VirtRegion, Region};
@@ -120,6 +120,7 @@ fn create_all_caps(it_v_reg: VirtRegion, bi_frame_vptr: Vptr, extra_bi_size: usi
     create_asid_control_cap(root_cnode_cap);
     let asid_pool = convert_to_mut_type_ref::<ASIDPool>(it_ap_cap.get_cap_pptr());
     asid_pool.write(IT_ASID, it_vspace_cap.get_cap_pptr());
+    KS_ASID_TABLE.lock()[IT_ASID >> ASIDSizeConstants::ASIDLowBits as usize] = asid_pool as *const ASIDPool as usize;
     (root_cnode_cap, it_vspace_cap, ipc_buf_cap)
 }
 

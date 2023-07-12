@@ -46,7 +46,18 @@ impl Cap {
 
     pub fn set_frame_mapped_address(&mut self, addr: usize) {
         assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
-        self.words[0] &= !(0x7fffffffff);
+        self.words[0] &= !0x7fffffffff;
         self.words[0] |= addr & 0x7fffffffff;
+    }
+
+    pub fn get_frame_mapped_asid(&self) -> usize {
+        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
+        sign_extend((self.words[1] & 0xffff000000000000) >> 48, 0x0)
+    }
+
+    pub fn set_frame_mapped_asid(&mut self, v64: usize) {
+        assert_eq!(self.get_cap_type(), CapTag::CapFrameCap);
+        self.words[1] &= !0xffff000000000000;
+        self.words[1] |= (v64 << 48) & 0xffff000000000000;
     }
 }

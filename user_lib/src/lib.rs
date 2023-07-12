@@ -9,15 +9,16 @@ use syscall::SYS_CALL;
 pub mod console;
 pub mod thread;
 pub mod untyped;
+pub mod vspace;
 
 pub fn call_with_mrs(dest: usize, msg_info: MessageInfo, mr0: &mut usize, mr1: &mut usize, mr2: &mut usize, mr3: &mut usize)
     -> MessageInfo {
     let mut local_dest = dest;
     let mut info = MessageInfo {words: [0; 1]};
-    let mut msg0 = if msg_info.get_label() > 0 { *mr0 } else { 0 };
-    let mut msg1 = if msg_info.get_label() > 1 { *mr1 } else { 0 };
-    let mut msg2 = if msg_info.get_label() > 2 { *mr2 } else { 0 };
-    let mut msg3 = if msg_info.get_label() > 3 { *mr3 } else { 0 };
+    let mut msg0 = if msg_info.get_length() > 0 { *mr0 } else { 0 };
+    let mut msg1 = if msg_info.get_length() > 1 { *mr1 } else { 0 };
+    let mut msg2 = if msg_info.get_length() > 2 { *mr2 } else { 0 };
+    let mut msg3 = if msg_info.get_length() > 3 { *mr3 } else { 0 };
     
     syscall::sysc_send_recv(SYS_CALL, dest, &mut local_dest, msg_info.words[0], &mut info.words[0],
                             &mut msg0, &mut msg1, &mut msg2, &mut msg3);
@@ -40,4 +41,8 @@ pub fn set_cap(index: usize, cptr: Cptr) {
 
 pub fn set_mr(index: usize, mr: usize) {
     get_ipc_buffer().msg[index] = mr;
+}
+
+pub fn get_mr(index: usize) -> usize {
+    get_ipc_buffer().msg[index]
 }

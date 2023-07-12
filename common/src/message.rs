@@ -1,9 +1,55 @@
+use crate::register::Register;
+
 pub const NUM_MSG_REGISTRES: usize = 4;
 pub const NUM_FRAME_REGISTERS: usize = 16;
 pub const NUM_GP_REGISTERS: usize = 16;
 pub const NUM_EXCEPTION_MSG: usize = 2;
 pub const NUM_SYSCALL_MSG: usize = 10;
 
+pub const MESSAGE_REGISTERS: [usize; NUM_MSG_REGISTRES] = [
+    Register::a2 as usize,
+    Register::a3 as usize,
+    Register::a4 as usize,
+    Register::a5 as usize,
+];
+
+pub const FRAME_REGISTERS: [usize; NUM_FRAME_REGISTERS] = [
+    Register::FaultIP as usize,
+    Register::ra as usize,
+    Register::sp as usize,
+    Register::gp as usize,
+    Register::s0 as usize,
+    Register::s1 as usize,
+    Register::s2 as usize,
+    Register::s3 as usize,
+    Register::s4 as usize,
+    Register::s5 as usize,
+    Register::s6 as usize,
+    Register::s7 as usize,
+    Register::s8 as usize,
+    Register::s9 as usize,
+    Register::s10 as usize,
+    Register::s11 as usize,
+];
+
+pub const GP_REGISTERS: [usize; NUM_GP_REGISTERS] = [
+    Register::a0 as usize,
+    Register::a1 as usize,
+    Register::a2 as usize,
+    Register::a3 as usize,
+    Register::a4 as usize,
+    Register::a5 as usize,
+    Register::a6 as usize,
+    Register::a7 as usize,
+    Register::t0 as usize,
+    Register::t1 as usize,
+    Register::t2 as usize,
+    Register::t3 as usize,
+    Register::t4 as usize,
+    Register::t5 as usize,
+    Register::t6 as usize,
+    Register::tp as usize,
+];
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct MessageInfo {
@@ -25,6 +71,10 @@ impl MessageInfo {
         let mut msg = MessageInfo { words: [0; 1]};
         msg.words[0] = word;
         msg
+    }
+
+    pub fn to_word(&self) -> usize {
+        self.words[0]
     }
 
     pub fn get_label(&self) -> usize {
@@ -78,7 +128,12 @@ pub enum InvocationLabel {
     IRQSetIRQHandler = 27,
     IRQClearIRQHandler = 28,
     DomainSetSet = 29,
-    nInvocationLabels = 30,
+    PageTableMap = 30,
+    PageTableUnmap = 31,
+    PageMap = 32,
+    PageUnmap = 33,
+    PageGetAddress = 34,
+    nInvocationLabels = 35,
 }
 
 impl InvocationLabel {

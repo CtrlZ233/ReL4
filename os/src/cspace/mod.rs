@@ -2,7 +2,7 @@ use log::{debug, error};
 use common::config::{CONFIG_ROOT_CNODE_SIZE_BITS, IT_ASID, SEL4_WORD_BITS, WORD_BITS, WORD_RADIX};
 use common::types::CNodeSlot::{SeL4CapInitThreadCNode, SeL4CapDomain, SeL4CapInitThreadVspace, SeL4CapBootInfoFrame, SeL4CapInitThreadASIDPool, SeL4CapASIDControl};
 use crate::root_server::ROOT_SERVER;
-use common::types::{ASIDSizeConstants, SlotPos, Pptr, Vptr, VmRights::VMReadWrite, CNodeSlot, Cptr};
+use common::types::{ASIDSizeConstants, SlotPos, Pptr, Vptr, CNodeSlot, Cptr};
 
 mod cnode;
 mod cap;
@@ -15,6 +15,7 @@ use crate::boot::NDKS_BOOT;
 use crate::cspace::cap::{is_cap_revocable};
 use crate::cspace::CapTag::CapCNodeCap;
 use crate::untyped::set_untyped_cap_as_full;
+use crate::mm::VmRights;
 use common::utils::{bit, mask};
 pub use mdb::MDBNode;
 
@@ -63,7 +64,7 @@ pub fn create_bi_frame_cap(cnode_cap: Cap, vptr: Vptr, boot_info_ptr: Pptr) -> C
 
 pub fn create_frame_cap(cnode_cap: Cap, vptr: Vptr, pptr: Pptr, index: usize, asid: usize) -> Cap {
     let cap = Cap::new_frame_cap(asid, pptr,
-                                 0, VMReadWrite as usize, false, vptr);
+                                 0, VmRights::VMReadWrite as usize, false, vptr);
     write_slot(cnode_cap.get_cap_pptr(), index, cap);
     cap
 }
@@ -100,8 +101,15 @@ pub fn derive_cap(slot: &mut CapTableEntry, cap: Cap) -> (bool, Cap) {
             new_cap.set_frame_mapped_address(0);
             (true, new_cap)
         }
-        _ => {
+
+        CapTag::CapUntypedCap | CapTag::CapZombieCap | CapTag::CapIrqControlCap | CapTag::CapReplyCap => {
+            error!("[derive_cap] unsupported: {:?}", cap.get_cap_type());
             (false, Cap::new_null_cap())
+        }
+
+        _ => {
+            // error!("[derive_cap] unsupported: {:?}", cap.get_cap_type());
+            (true, cap)
         }
     }
 }

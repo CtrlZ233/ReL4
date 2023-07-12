@@ -1,3 +1,5 @@
+use crate::{types::Paddr, config::PPTR_BASE_OFFSET};
+
 use super::config::{CONFIG_PT_LEVELS, PAGE_TABLE_INDEX_BITS, PAGE_BITS, WORD_RADIX, L2_BITMAP_SIZE};
 
 #[inline]
@@ -100,4 +102,9 @@ pub fn convert_to_type_ref<T>(addr: usize) -> &'static T {
     unsafe {
         & *(addr as *mut T)
     }
+}
+
+#[inline]
+pub fn addr_from_pptr(pptr: usize) -> Paddr {
+    pptr - PPTR_BASE_OFFSET
 }

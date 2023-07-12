@@ -24,7 +24,7 @@ lazy_static!{
 
     static ref AVAIL_REG: Mutex<[Region; MAX_NUM_FREEMEM_REG]> = Mutex::new([Region::default(); MAX_NUM_FREEMEM_REG]);
 
-    static ref KS_ASID_TABLE: Mutex<[APPtr; 1 << (ASIDSizeConstants::ASIDHighBits as usize)]> = Mutex::new([0; 1 << (ASIDSizeConstants::ASIDHighBits as usize)]);
+    pub static ref KS_ASID_TABLE: Mutex<[APPtr; 1 << (ASIDSizeConstants::ASIDHighBits as usize)]> = Mutex::new([0; 1 << (ASIDSizeConstants::ASIDHighBits as usize)]);
 }
 
 

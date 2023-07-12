@@ -136,6 +136,51 @@ impl CapTableEntry {
             _ => false
         }
     }
+
+    pub fn delete(&mut self, exposed: bool) -> bool {
+        if let Some(cleanup_info) = self.finalise_slot(exposed) {
+            self.emplty_slot(cleanup_info);
+            return true;
+        }
+        if exposed {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn emplty_slot(&mut self, cleanup_info: Cap) {
+        if self.cap.get_cap_type() != CapTag::CapNullCap {
+            let mdb_node = self.mdb_node;
+            if mdb_node.get_mdb_prev() != 0 {
+                let prev = convert_to_mut_type_ref::<CapTableEntry>(mdb_node.get_mdb_prev());
+                prev.mdb_node.set_mdb_next(mdb_node.get_mdb_next());
+            }
+
+            if mdb_node.get_mdb_next() != 0 {
+                let next = convert_to_mut_type_ref::<CapTableEntry>(mdb_node.get_mdb_next());
+                next.mdb_node.set_mdb_prev(mdb_node.get_mdb_prev());
+                next.mdb_node.set_mdb_first_badged(next.mdb_node.get_mdb_first_badged() || mdb_node.get_mdb_first_badged());
+            }
+            
+            self.cap = Cap::new_null_cap();
+            self.mdb_node = MDBNode::null_mdbnode();
+            // postCapDeletion need to do;
+        }
+    }
+
+    pub fn finalise_slot(&mut self, immediate: bool) -> Option<Cap>{
+
+        while self.cap.get_cap_type() != CapTag::CapNullCap {
+            let is_final = self.is_final_cap();
+            let fc_ret = finalise_cap(self.cap, is_final, false);
+            if is_cap_removable(fc_ret.remainder, self) {
+                return Some(fc_ret.cleanup_info);
+            }
+            
+            panic!("failed to finalise slot");
+        }
+        Some(Cap::new_null_cap())
+    }
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -315,8 +360,6 @@ impl Cap {
 }
 
 
-
-
 pub fn is_cap_revocable(derived_cap: Cap, src_cap: Cap) -> bool {
     return match derived_cap.get_cap_type() {
         CapTag::CapUntypedCap => {
@@ -337,3 +380,31 @@ pub fn is_cap_revocable(derived_cap: Cap, src_cap: Cap) -> bool {
     }
 }
 
+pub fn is_cap_removable(cap: Cap, slot: &CapTableEntry) -> bool {
+    match cap.get_cap_type() {
+        CapTag::CapNullCap => {
+            return true;
+        }
+
+        _ => {
+            panic!()
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FinaliseCapRet {
+    pub remainder: Cap,
+    pub cleanup_info: Cap,
+}
+
+fn finalise_cap(cap: Cap, is_final: bool, exposed: bool) -> FinaliseCapRet {
+    match cap.get_cap_type() {
+        _ => {
+            FinaliseCapRet {
+                remainder: Cap::new_null_cap(),
+                cleanup_info: Cap::new_null_cap(),
+            }
+        }
+    }
+}

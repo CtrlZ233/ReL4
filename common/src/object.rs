@@ -31,19 +31,23 @@ impl ObjectType {
             }
         }
     }
+
+    pub fn get_size(&self, user_object_size: usize) -> usize {
+        match *self {
+            ObjectType::UntypedObject => user_object_size,
+            ObjectType::TCBObject => SEL4_TCB_BITS,
+            ObjectType::EndpointObject => SEL4_ENDPOINT_BITS,
+            ObjectType::NotificationObject => SEL4_NOTIFICATION_BITS,
+            ObjectType::CapTableObject => SEL4_SLOT_BITS + user_object_size,
+            ObjectType::RISCV_4KPage | ObjectType::RISCV_PageTableObject => PAGE_BITS,
+            _ => {
+                // error!("invalid object type: {}", t as usize);
+                return 0;
+            }
+        }
+    }
 }
 
 pub fn get_object_size(t: ObjectType, user_object_size: usize) -> usize {
-    match t {
-        ObjectType::UntypedObject => user_object_size,
-        ObjectType::TCBObject => SEL4_TCB_BITS,
-        ObjectType::EndpointObject => SEL4_ENDPOINT_BITS,
-        ObjectType::NotificationObject => SEL4_NOTIFICATION_BITS,
-        ObjectType::CapTableObject => SEL4_SLOT_BITS + user_object_size,
-        ObjectType::RISCV_4KPage | ObjectType::RISCV_PageTableObject => PAGE_BITS,
-        _ => {
-            // error!("invalid object type: {}", t as usize);
-            return 0;
-        }
-    }
+    t.get_size(user_object_size)
 }

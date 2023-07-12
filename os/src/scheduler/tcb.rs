@@ -1,26 +1,26 @@
-use common::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, types::{Pptr, Dom, Prio, Cptr}};
-use crate::{scheduler::{BADGE_REGISTER, MSG_INFO_REGISTER, re_schedule}, cspace::MDBNode};
-use common::utils::{bit, hart_id, sign_extend, bool2usize, mask, page_bits_for_size, convert_to_mut_type_ref, convert_to_type_ref};
+use common::{config::{CONTEXT_REGISTERS_NUM, SEL4_IDLE_TCB_SLOT_SIZE, CONFIG_KERNEL_STACK_BITS}, 
+            types::{Pptr, Dom, Prio, Cptr}, utils::page_bits_for_size, register::{Register, SSTATUS_SPIE, SSTATUS_SPP, SP, BADGE_REGISTER, MSG_INFO_REGISTER}};
+use crate::{scheduler::{re_schedule, domain_schedule::PriorityConst}, cspace::MDBNode, mm::VmRights};
+use common::utils::{bit, hart_id, sign_extend, bool2usize, mask, convert_to_mut_type_ref, convert_to_type_ref};
 use core::ops::{Index, IndexMut};
-use super::{register::{Register, SSTATUS_SPP, SSTATUS_SPIE, SP}, idle_thread, KERNEL_STACK, KS_CUR_THREAD,
-    KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD, ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap};
+use super::{idle_thread, KERNEL_STACK, KS_CUR_THREAD, KS_SCHEDULER_ACTION, SCHEDULER_ACTION_RESUME_CURRENT_THREAD,
+    ready_queues_index, KS_READY_QUEUES, remove_from_bitmap, add_to_bitmap, possible_switch_to};
 
 use log::{error, debug};
-use common::config::{SEL4_TCB_BITS, VM_READ_ONLY, VM_READ_WRITE, WORD_BITS};
+use common::config::{SEL4_TCB_BITS, WORD_BITS};
 use common::message::InvocationLabel::InvalidInvocation;
 use common::message::MessageInfo;
+use common::register::Register::*;
 use crate::cspace::{Cap, CapTableEntry, CapTag, resolve_address_bits};
 use crate::cspace::TCBCNodeIndex::{TCBBuffer, TCBCTable, TCBReply};
 use crate::scheduler::endpoint::{EndPoint, EndPointState};
-use crate::scheduler::Register::FaultIP;
-use crate::scheduler::register::Register::{NextIP, SSTATUS};
 use crate::scheduler::ThreadStateEnum::{ThreadStateInactive, ThreadStateRunning};
 
 pub type ThreadControlFlag = usize;
 pub const THREAD_CONTROL_UPDATE_PRIORITY: usize = 0x1;
-pub const THREAD_CONTROL_UPDATE_IPC_BUFFER: usize = 0x1;
-pub const THREAD_CONTROL_UPDATE_SPACE: usize = 0x1;
-pub const THREAD_CONTROL_UPDATE_MCP: usize = 0x1;
+pub const THREAD_CONTROL_UPDATE_IPC_BUFFER: usize = 0x2;
+pub const THREAD_CONTROL_UPDATE_SPACE: usize = 0x4;
+pub const THREAD_CONTROL_UPDATE_MCP: usize = 0x8;
 
 #[derive(Default)]
 pub struct TCB {
@@ -74,6 +74,16 @@ impl TCB {
         }
         self.set_thread_state(ThreadStateInactive);
         self.de_queue_from_sched();
+    }
+
+    pub fn restart(&mut self) {
+        if self.is_stopped() {
+            self.cancel_ipc();
+            self.setup_replay_master();
+            self.set_thread_state(ThreadStateEnum::ThreadStateRestart);
+            self.enqueue_to_sched();
+            possible_switch_to(self);
+        }
     }
 
     pub fn update_restart_pc(&mut self) {
@@ -189,6 +199,32 @@ impl TCB {
         }
     }
 
+    pub fn is_stopped(&self) -> bool {
+        match self.get_state() {
+            ThreadStateInactive | ThreadStateEnum::ThreadStateBlockedOnReceive | ThreadStateEnum::ThreadStateBlockedOnSend
+                | ThreadStateEnum::ThreadStateBlockedOnNotification | ThreadStateEnum::ThreadStateBlockedOnReply => {
+                true
+            }
+
+            _ => {
+                false
+            }
+        }
+    }
+
+    pub fn is_runnable(&self) -> bool {
+        match self.get_state() {
+            ThreadStateRunning | ThreadStateEnum::ThreadStateRestart => {
+                true
+            }
+            _ => false
+        }
+    }
+
+    fn is_current(&self) -> bool {
+        self as *const TCB as usize == unsafe { KS_CUR_THREAD[hart_id()] }
+    }
+
     pub fn get_state(&self) -> ThreadStateEnum {
         unsafe {
             core::mem::transmute::<u8, ThreadStateEnum>(sign_extend(self.tcb_state.words[0] & 0xf, 0x0) as u8)
@@ -231,6 +267,18 @@ impl TCB {
         }
     }
 
+    pub fn set_priority(&mut self, prio: usize) {
+        self.de_queue_from_sched();
+        self.tcb_priority = prio;
+        if self.is_runnable() {
+            if self.is_current() {
+                re_schedule();
+            } else {
+                possible_switch_to(self);
+            }
+        }
+    }
+
     pub fn init_context(&mut self) {
         self.context.registers[SSTATUS as usize] = SSTATUS_SPIE;
     }
@@ -266,9 +314,9 @@ impl TCB {
             error!("is device frame");
             return None;
         }
-        let vm_right = buffer_cap.get_frame_vm_right();
+        let vm_right = VmRights::from_usize(buffer_cap.get_frame_vm_right());
         
-        if vm_right == VM_READ_WRITE || (!is_receiver && vm_right == VM_READ_ONLY) {
+        if vm_right == VmRights::VMReadWrite || (!is_receiver && vm_right == VmRights::VMReadOnly) {
             let base_ptr = buffer_cap.get_frame_base_ptr();
             let page_bits = page_bits_for_size(buffer_cap.get_frame_size());
             // error!("w_buffer_ptr: {:#x}, base_ptr: {:#x}, page_bits: {}", w_buffer_ptr, base_ptr, page_bits);
@@ -276,7 +324,12 @@ impl TCB {
         }
 
         None
+    }
 
+    pub fn check_prio(&self, prio: usize) -> bool {
+        let mcp = self.tcb_mcp;
+        assert!(mcp <= PriorityConst::MaxPrio as usize);
+        return prio <= mcp;
     }
 }
 

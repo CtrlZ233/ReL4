@@ -1,8 +1,8 @@
 mod page_table;
 mod asid;
 use log::debug;
-pub use page_table::PageTableEntry;
-pub use asid::ASIDPool;
+pub use page_table::{PageTableEntry, VMAttributes, VmRights, PTEFlags};
+pub use asid::{ASIDPool, find_vspace_for_asid};
 
 use riscv::register::satp;
 use riscv::asm::sfence_vma_all;
@@ -11,7 +11,6 @@ use common::utils::*;
 
 use common::config::{CONFIG_PT_LEVELS, PPTR_BASE, PPTR_TOP, PADDR_BASE, PPTR_BASE_OFFSET, ROOT_PAGE_TABLE_SIZE, KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PAGE_BITS, PV_BASE_OFFSET, PAGE_TABLE_INDEX_BITS};
 use crate::cspace::{Cap, CapTag};
-use crate::mm::page_table::PTEFlags;
 use common::types::{Pptr, Vptr, Paddr, VirtRegion};
 
 pub fn init() {
@@ -163,6 +162,12 @@ pub fn look_up_pt_slot(lvl1pt: &mut [PageTableEntry], vptr: Vptr) -> (usize, Ppt
         pt_slot = &pt[(vptr >> pt_bits_left ) & mask(PAGE_TABLE_INDEX_BITS)];
     }
     (pt_bits_left, pt_slot as *const PageTableEntry as Pptr)
+}
+
+pub fn look_up_pt_slot2(lvl1pt: &mut PageTableEntry, vptr: Vptr) -> (usize, Pptr) {
+    let array = convert_to_mut_type_ref::<[PageTableEntry; ROOT_PAGE_TABLE_SIZE]>
+                                            (lvl1pt as *mut PageTableEntry as usize);
+    look_up_pt_slot(array, vptr)
 }
 
 pub fn is_valid_vtable_root(cap: Cap) -> bool {

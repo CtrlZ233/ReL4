@@ -1,6 +1,6 @@
 use common::{types::Pptr, message::InvocationLabel, object::{ObjectType, get_object_size}, config::*, utils::{convert_to_mut_type_ref, aligned_up, bit}};
 use common::object::ObjectType::*;
-use crate::{scheduler::{ThreadStateEnum::ThreadStateRestart, TCB}, cspace::{CNode, insert_new_cap}};
+use crate::{scheduler::{ThreadStateEnum::ThreadStateRestart, TCB}, cspace::{CNode, insert_new_cap}, mm::VmRights};
 use crate::cspace::CapTag::CapCNodeCap;
 use log::{debug, error};
 
@@ -78,6 +78,7 @@ pub fn decode_untyped_invocation(inv_label: usize, length: usize, slot: &mut Cap
     let mut reset = true;
     if !slot.ensure_no_child() {
         free_index = cap.get_untyped_free_index();
+        debug!("have child: get_untyped_free_index: {}", free_index);
         reset = false;
     }
 
@@ -86,7 +87,8 @@ pub fn decode_untyped_invocation(inv_label: usize, length: usize, slot: &mut Cap
     let untyped_free_bytes = bit(cap.get_untyped_cap_block_size()) - (free_index << MIN_UNTYPED_BITS);
 
     if (untyped_free_bytes >> object_size) < node_window {
-        error!("Untyped Retype: Insufficient memory");
+        error!("Untyped Retype: Insufficient memory: {} : {} : {} : {} : {}",
+                free_index << MIN_UNTYPED_BITS, cap.get_untyped_cap_block_size(), untyped_free_bytes, object_size, node_window);
         return;
     }
 
@@ -148,5 +150,19 @@ pub fn create_object(new_type: ObjectType,  region_base: Pptr, user_size: usize,
 }
 
 pub fn create_arch_object(new_type: ObjectType,  region_base: Pptr, user_size: usize, device_mem: bool) -> Cap {
-    Cap::new_null_cap()
+    match new_type {
+        ObjectType::RISCV_4KPage => {
+            Cap::new_frame_cap(0, region_base,  0,
+                VmRights::VMReadWrite as usize, device_mem, 0)
+        }
+
+        ObjectType::RISCV_PageTableObject => {
+            Cap::new_page_table_cap(0, region_base, false, 0)
+        }
+        _ => {
+            error!("[create_arch_object] unsupported");
+            Cap::new_null_cap()
+        }
+    }
+    
 }

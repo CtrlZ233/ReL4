@@ -1,4 +1,3 @@
-use crate::config::SEL4_TCB_BITS;
 use super::config::{PPTR_BASE_OFFSET, NUM_ASID_POOL_BITS, ASID_POOL_INDEX_BITS, SEL4_MSG_MAX_LEN, SEL4_MSG_MAX_EXTRA_CAPS};
 use super::utils::bool2usize;
 use super::message::MessageInfo;
@@ -18,16 +17,15 @@ pub type NodeId = usize;
 pub type PTEPtr = Pptr;
 pub type APPtr = Pptr;
 
-pub enum VmRights {
-    VMKernelOnly = 1,
-    VMReadOnly = 2,
-    VMReadWrite = 3
+pub enum VMAttributes {
+    ExecuteNever = 0x1,
+    DefaultVMAttributes = 0x0,
 }
 
 pub enum ASIDSizeConstants {
     ASIDHighBits = NUM_ASID_POOL_BITS as isize,
     ASIDLowBits = ASID_POOL_INDEX_BITS as isize,
-} 
+}
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Region {
@@ -118,3 +116,74 @@ pub struct IpcBuffer {
     pub receive_depth: usize,
 }
 
+pub struct CapRights {
+    pub word: [usize; 1],
+}
+
+impl CapRights {
+    pub fn new(allow_grant_reply: usize, allow_grant: usize, allow_read: usize, allow_write: usize) -> Self {
+        let mut rights: CapRights = CapRights { word: [0] };
+        rights.word[0] = 0 | (allow_grant_reply & 0x1) << 3
+                        | (allow_grant & 0x1) << 2
+                        | (allow_read & 0x1) << 1
+                        | (allow_write & 0x1) << 0;
+        return rights;
+    }
+
+    pub fn from_word(w: usize) -> Self {
+        Self {
+            word: [w]
+        }
+    }
+
+    pub fn re_stucture(&mut self, allow_grant_reply: usize, allow_grant: usize, allow_read: usize, allow_write: usize) {
+        self.word[0] = 0 | (allow_grant_reply & 0x1) << 3
+                        | (allow_grant & 0x1) << 2
+                        | (allow_read & 0x1) << 1
+                        | (allow_write & 0x1) << 0;
+    }
+
+    pub fn get_allow_grant_reply(&self) -> bool {
+        Self::sign_extend((self.word[0] & 0x8) >> 3, 0x0) != 0
+    }
+
+    pub fn set_allow_grant_reply(&mut self, v64: usize) {
+        self.word[0] &= !0x8;
+        self.word[0] |= (v64 << 3) & 0x8;
+    }
+
+    pub fn get_allow_grant(&self) -> bool {
+        Self::sign_extend((self.word[0] & 0x4) >> 2, 0x0) != 0
+    }
+
+    pub fn set_allow_grant(&mut self, v64: usize) {
+        self.word[0] &= !0x4;
+        self.word[0] |= (v64 << 2) & 0x4;
+    }
+
+    pub fn get_allow_read(&self) -> bool {
+        Self::sign_extend((self.word[0] & 0x2) >> 1, 0x0) != 0
+    }
+
+    pub fn set_allow_read(&mut self, v64: usize) {
+        self.word[0] &= !0x2;
+        self.word[0] |= (v64 << 1) & 0x2;
+    }
+
+    pub fn get_allow_write(&self) -> bool {
+        Self::sign_extend((self.word[0] & 0x1) >> 0, 0x0) != 0
+    }
+
+    pub fn set_allow_write(&mut self, v64: usize) {
+        self.word[0] &= !0x1;
+        self.word[0] |= (v64 << 0) & 0x1;
+    }
+
+    #[inline]
+    pub fn sign_extend(ret: usize, sign: usize) -> usize {
+        if ret & (1 << 63) != 0 {
+            return ret | sign;
+        }
+        ret
+    }
+}
