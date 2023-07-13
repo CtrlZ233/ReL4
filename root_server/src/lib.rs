@@ -5,7 +5,6 @@
 
 use core::arch::{asm, global_asm};
 
-#[macro_use]
 extern crate user_lib;
 
 extern crate common;

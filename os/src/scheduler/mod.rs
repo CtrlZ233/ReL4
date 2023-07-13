@@ -11,11 +11,10 @@ use core::sync::atomic::Ordering::SeqCst;
 use spin::Mutex;
 use domain_schedule::DomainScheduler;
 
-pub use tcb::{TCB, IdleTCB, ThreadStateEnum, TCBCNode, ThreadControlFlag, THREAD_CONTROL_UPDATE_PRIORITY,
-    THREAD_CONTROL_UPDATE_IPC_BUFFER, THREAD_CONTROL_UPDATE_SPACE, THREAD_CONTROL_UPDATE_MCP};
+pub use tcb::{TCB, IdleTCB, ThreadStateEnum, TCBCNode};
 
 use common::{config::{CPU_NUM, SEL4_IDLE_TCB_SLOT_SIZE, TCB_OFFSET, CONFIG_KERNEL_STACK_BITS, CONFIG_NUM_DOMAINS, NUM_READY_QUEUES,
-    L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS}, types::Pptr, register::CAP_REGISTER};
+    L2_BITMAP_SIZE, WORD_RADIX, WORD_BITS, SEL4_TCB_BITS, CONFIG_NUM_PRIORITIES, CONFIG_TIME_SLICE}, types::Pptr, register::CAP_REGISTER};
 use crate::mm::activate_kernel_vspace;
 use common::config::PPTR_BASE_OFFSET;
 use crate::cspace::{Cap, CNode, create_init_thread_cap, cte_insert, derive_cap, TCBCNodeIndex};
@@ -67,7 +66,7 @@ pub fn create_idle_thread() {
 }
 
 pub fn idle_thread() {
-    while true {
+    loop {
         unsafe {
             asm!("wfi");
         }
@@ -155,7 +154,7 @@ pub fn schedule_choose_new_thread() {
 pub fn schedule() {
     unsafe {
         if KS_SCHEDULER_ACTION[hart_id()] != SCHEDULER_ACTION_RESUME_CURRENT_THREAD {
-            let mut was_runable = false;
+            let mut was_runable: bool = false;
             let ks_cur_thread = get_current_mut_tcb();
             if ks_cur_thread.is_schedulable() {
                 was_runable = true;
@@ -164,7 +163,7 @@ pub fn schedule() {
 
             if KS_SCHEDULER_ACTION[hart_id()] == SCHEDULER_ACTION_CHOOSE_NEW_THREAD {
                 debug!("choose new thread");
-                schedule_choose_new_thread()
+                schedule_choose_new_thread();
             } else {
                 let tcb = &mut *(KS_SCHEDULER_ACTION[hart_id()] as *mut TCB);
                 debug!("KS_SCHEDULER_ACTION[hart_id()]: {:#x}", KS_SCHEDULER_ACTION[hart_id()]);
@@ -272,7 +271,7 @@ pub fn get_current_mut_tcb() -> &'static mut TCB {
 
 pub fn ready_queues_index(dom: usize, prio: usize) -> usize {
     assert_eq!(dom , 0);
-    prio
+    dom * CONFIG_NUM_PRIORITIES + prio
 }
 
 pub fn remove_from_bitmap(_hart_id: usize, dom: usize, prio: usize) {
@@ -303,5 +302,19 @@ pub fn get_highest_prio(dom: usize) -> usize {
         let l2_index = WORD_BITS - 1 - (KS_READY_QUEUES_L2_BITMAP[dom][l1_index_invert].leading_zeros() as usize);
         l1_index_2_prio(l1_index) | l2_index
     }
-    
+}
+
+pub fn timer_tick() {
+    let cur_tcb = get_current_mut_tcb();
+    if cur_tcb.get_state() == ThreadStateRunning {
+        if cur_tcb.tcb_time_slice > 1 {
+            cur_tcb.tcb_time_slice -= 1;
+        } else {
+            cur_tcb.tcb_time_slice = CONFIG_TIME_SLICE;
+            cur_tcb.append_to_sched();
+            re_schedule();
+        }
+    }
+
+    // TODO: domain num > 1
 }

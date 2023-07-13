@@ -4,10 +4,9 @@ use common::message::{MessageInfo, NUM_MSG_REGISTRES};
 use common::config::{MSG_MAX_EXTRA_CAPS, SEL4_MSG_MAX_LEN};
 use crate::cspace::{Cap, CapTableEntry, CapTag};
 use crate::sbi::shutdown;
-use crate::scheduler::{KS_CUR_THREAD, TCB};
+use crate::scheduler::{TCB, get_current_mut_tcb};
 use crate::scheduler::ThreadStateEnum::{ThreadStateRestart, ThreadStateRunning};
 use common::types::Pptr;
-use common::utils::{convert_to_mut_type_ref, hart_id};
 use crate::inner_syscall::CUR_EXTRA_CAPS;
 
 use super::tcb::decode_tcb_invocation;
@@ -15,9 +14,7 @@ use super::untyped::decode_untyped_invocation;
 use super::vspace::{decode_frame_invocation, decode_page_table_invocation};
 
 pub fn handle_invocation(is_call: bool , is_blocking: bool) {
-    let thread = unsafe {
-        convert_to_mut_type_ref::<TCB>(KS_CUR_THREAD[hart_id()])
-    };
+    let thread = get_current_mut_tcb();
 
     let info = MessageInfo::from_word(thread.get_register(MSG_INFO_REGISTER));
     let cptr = thread.get_register(CAP_REGISTER);
@@ -59,8 +56,8 @@ pub fn handle_invocation(is_call: bool , is_blocking: bool) {
     }
 }
 
-fn decode_invocation(inv_label: usize, length: usize, cap_index: usize, slot: &mut CapTableEntry,
-                         cap: Cap, block: bool, call: bool, buffer: Pptr) {
+fn decode_invocation(inv_label: usize, length: usize, _cap_index: usize, slot: &mut CapTableEntry,
+                         cap: Cap, _block: bool, call: bool, buffer: Pptr) {
     match cap.get_cap_type() {
         CapTag::CapThreadCap => {
             decode_tcb_invocation(inv_label, length, cap, slot, call, buffer);
@@ -82,7 +79,7 @@ fn decode_invocation(inv_label: usize, length: usize, cap_index: usize, slot: &m
     }
 }
 
-fn look_up_extra_caps(tcb: &mut TCB, ipc_buffer: Option<Pptr>, msg: MessageInfo) -> bool {
+fn look_up_extra_caps(tcb: &TCB, ipc_buffer: Option<Pptr>, msg: MessageInfo) -> bool {
     let length = msg.get_extra_caps();
     if length == 0 || ipc_buffer.is_none() {
         unsafe { CUR_EXTRA_CAPS[0] = 0; }

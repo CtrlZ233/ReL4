@@ -1,3 +1,4 @@
+#[allow(non_camel_case_types)]
 pub enum Register {
     ra = 0, sp = 1, gp = 2, tp = 3,
 

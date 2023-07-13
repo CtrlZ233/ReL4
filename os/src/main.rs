@@ -13,7 +13,8 @@
 #![feature(panic_info_message)]
 #![feature(stdsimd)]
 #![feature(core_intrinsics)]
-#[macro_use]
+#![allow(unused)]
+
 extern crate bitflags;
 
 extern crate syscall;
@@ -37,6 +38,7 @@ mod untyped;
 mod trap;
 mod inner_syscall;
 mod object;
+mod interrupt;
 
 
 global_asm!(include_str!("entry.asm"));
@@ -93,6 +95,8 @@ pub fn rust_main() -> ! {
 
     trap::init();
     debug!("kernel_end: {:#x}", kernel_end as usize);
+
+
     scheduler::schedule();
     scheduler::activate_thread();
     trap::restore_user_context();

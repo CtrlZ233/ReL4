@@ -1,11 +1,9 @@
 use core::arch::{asm, global_asm};
 use log::{error, debug};
-use crate::sbi;
+use crate::{sbi, interrupt};
 use crate::scheduler::{KS_CUR_THREAD, TCB};
 use common::utils::hart_id;
-use riscv::register:: {
-    stvec,
-};
+use riscv::register::stvec;
 use crate::inner_syscall;
 use riscv::register::stvec::TrapMode;
 global_asm!(include_str!("trap.asm"));
@@ -18,6 +16,7 @@ pub fn init() {
         stvec::write(trap_entry as usize, TrapMode::Direct);
     }
     // TODO: set timer
+    interrupt::init();
 }
 
 pub fn restore_user_context() {
@@ -94,11 +93,13 @@ pub fn rust_handle_syscall(cptr: usize, msg_info: usize, syscall: isize) -> ! {
 #[no_mangle]
 pub fn rust_handle_interrupt() -> ! {
     debug!("hello handle_interrupt");
+    interrupt::handle_interrupt();
     sbi::shutdown(false)
 }
 
 #[no_mangle]
 pub fn rust_handle_exception() -> ! {
     debug!("hello handle_exception");
+    interrupt::handle_interrupt();
     sbi::shutdown(false)
 }

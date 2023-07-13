@@ -48,6 +48,7 @@ pub const SEL4_MSG_MAX_EXTRA_CAPS: usize = (1 << SEL4_MSG_EXTRA_CAP_BITS) - 1;
 pub const CONFIG_ROOT_CNODE_SIZE_BITS: usize = 13;
 pub const CONFIG_MAX_NUM_NODES: usize = 1;
 pub const CONFIG_KERNEL_STACK_BITS: usize = 12;
+pub const CONFIG_TIME_SLICE: usize = 5;
 // root server image
 pub const UI_P_REG_START: usize = 0x82000000;
 pub const UI_P_REG_END: usize = 0x82400000;
@@ -96,5 +97,7 @@ pub const CONFIG_RETYPE_FAN_OUT_LIMIT: usize = 256;
 
 pub const CONFIG_RESET_CHUNK_BITS: usize = 8;
 
-
 pub const NULL_PRIO: usize = 0;
+
+pub const CLOCK_FREQ: usize = 12500000;
+pub const TICKS_PER_SEC: usize = 100;

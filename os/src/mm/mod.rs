@@ -101,7 +101,7 @@ pub fn get_n_paging(it_v_reg: VirtRegion) -> usize {
     ans
 }
 
-pub fn copy_global_mappings(newLvl1pt: &mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE]) {
+pub fn copy_global_mappings(new_lvl1pt: &mut [PageTableEntry; ROOT_PAGE_TABLE_SIZE]) {
     let _lock = KERNEL_VSPACE_LOCK.lock();
     let mut i = get_pt_index(PPTR_BASE, 0);
     let global_kernel_vspace = unsafe {
@@ -109,7 +109,7 @@ pub fn copy_global_mappings(newLvl1pt: &mut [PageTableEntry; ROOT_PAGE_TABLE_SIZ
     };
 
     while i < bit(PAGE_TABLE_INDEX_BITS) {
-        newLvl1pt[i] = global_kernel_vspace[i];
+        new_lvl1pt[i] = global_kernel_vspace[i];
         i += 1;
     }
 }

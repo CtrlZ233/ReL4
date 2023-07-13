@@ -133,12 +133,12 @@ pub enum InvocationLabel {
     PageMap = 32,
     PageUnmap = 33,
     PageGetAddress = 34,
-    nInvocationLabels = 35,
+    NInvocationLabels = 35,
 }
 
 impl InvocationLabel {
     pub fn from_usize(label: usize) -> Self {
-        assert!(label >= InvocationLabel::InvalidInvocation as usize && label < InvocationLabel::nInvocationLabels as usize);
+        assert!(label >= InvocationLabel::InvalidInvocation as usize && label < InvocationLabel::NInvocationLabels as usize);
         unsafe {
             core::mem::transmute::<u8, InvocationLabel>(label as u8)
         }

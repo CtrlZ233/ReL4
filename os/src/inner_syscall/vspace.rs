@@ -1,8 +1,8 @@
 use common::{types::{Pptr, CapRights}, message::InvocationLabel, utils::{convert_to_mut_type_ref, bit, mask, page_bits_for_size, addr_from_pptr}, config::{USER_TOP, PAGE_BITS}};
 
-use crate::{cspace::{CapTableEntry, Cap, CapTag}, mm::{PageTableEntry, find_vspace_for_asid, look_up_pt_slot, look_up_pt_slot2, VmRights, PTEFlags}, scheduler::{ThreadStateEnum, set_thread_state}};
+use crate::{cspace::{CapTableEntry, Cap, CapTag}, mm::{PageTableEntry, find_vspace_for_asid, look_up_pt_slot2, VmRights, PTEFlags}, scheduler::{ThreadStateEnum, set_thread_state}};
 use super::{CUR_EXTRA_CAPS, get_syscall_arg};
-use log::{debug, error};
+use log::error;
 use crate::mm::VMAttributes;
 
 pub fn decode_frame_invocation(label: usize, length: usize, cte: &mut CapTableEntry, cap: Cap,
@@ -113,7 +113,7 @@ pub fn decode_frame_invocation(label: usize, length: usize, cte: &mut CapTableEn
 }
 
 
-pub fn decode_page_table_invocation(label: usize, length: usize, cte: &mut CapTableEntry, cap: Cap, buffer: Pptr) {
+pub fn decode_page_table_invocation(_label: usize, length: usize, cte: &mut CapTableEntry, cap: Cap, buffer: Pptr) {
     if length < 2 || unsafe { CUR_EXTRA_CAPS[0] == 0 } {
         error!("RISCVPageTable: truncated message");
         return;

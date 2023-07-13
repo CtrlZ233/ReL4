@@ -8,9 +8,9 @@ pub enum ObjectType {
     NotificationObject = 3,
     CapTableObject = 4,
     NonArchObjectTypeCount = 5,
-    RISCV_4KPage = 6,
-    RISCV_MegaPage = 7,
-    RISCV_PageTableObject = 8,
+    Riscv4kpage = 6,
+    RiscvMegaPage = 7,
+    RiscvPageTableObject = 8,
     ObjectTypeCount = 9,
 }
 
@@ -23,7 +23,7 @@ impl ObjectType {
 
     pub fn is_frame_type(&self) -> bool {
         match self {
-            Self::RISCV_4KPage | Self::RISCV_MegaPage => {
+            Self::Riscv4kpage | Self::RiscvMegaPage => {
                 true
             }
             _ => {
@@ -39,7 +39,7 @@ impl ObjectType {
             ObjectType::EndpointObject => SEL4_ENDPOINT_BITS,
             ObjectType::NotificationObject => SEL4_NOTIFICATION_BITS,
             ObjectType::CapTableObject => SEL4_SLOT_BITS + user_object_size,
-            ObjectType::RISCV_4KPage | ObjectType::RISCV_PageTableObject => PAGE_BITS,
+            ObjectType::Riscv4kpage | ObjectType::RiscvPageTableObject => PAGE_BITS,
             _ => {
                 // error!("invalid object type: {}", t as usize);
                 return 0;

@@ -1,9 +1,8 @@
 use common::{message::{InvocationLabel, NUM_FRAME_REGISTERS, NUM_GP_REGISTERS, NUM_MSG_REGISTRES,
     MESSAGE_REGISTERS, FRAME_REGISTERS, GP_REGISTERS, MessageInfo},
     utils::{convert_to_mut_type_ref, hart_id, convert_to_type_ref}, 
-            types::{Pptr, Cptr, Prio, IpcBuffer}, config::NULL_PRIO, register::{BADGE_REGISTER, MSG_INFO_REGISTER}};
-use crate::{scheduler::{ThreadStateEnum::ThreadStateRestart, ThreadControlFlag, THREAD_CONTROL_UPDATE_SPACE,
-        THREAD_CONTROL_UPDATE_IPC_BUFFER, THREAD_CONTROL_UPDATE_MCP, re_schedule, THREAD_CONTROL_UPDATE_PRIORITY,
+            types::{Pptr, Cptr, IpcBuffer}, register::{BADGE_REGISTER, MSG_INFO_REGISTER}};
+use crate::{scheduler::{ThreadStateEnum::ThreadStateRestart, re_schedule,
         set_thread_state, get_current_mut_tcb}, cspace::{CapTableEntry, Cap, derive_cap, TCBCNodeIndex, 
             CapTag, cte_insert}, ipc::check_valid_ipcbuf, mm::is_valid_vtable_root};
 use log::{debug, error};
@@ -40,6 +39,7 @@ pub fn decode_tcb_invocation(inv_label: usize, length: usize, cap: Cap, slot: &m
         }
 
         InvocationLabel::TCBResume => {
+            set_thread_state(ThreadStateRestart);
             let target = convert_to_mut_type_ref::<TCB>(cap.get_tcb_ptr());
             invoke_tcb_resume(target);
         }
@@ -221,7 +221,6 @@ fn invoke_tcb_thread_update_ipc_buffer(target: &mut TCB, slot: &mut CapTableEntr
 }
 
 fn invoke_tcb_thread_update_priority(target: &mut TCB, prio: usize) {
-    let tcap = Cap::new_thread_cap(target as *mut TCB as usize);
     target.set_priority(prio);
 }
 

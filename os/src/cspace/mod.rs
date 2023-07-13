@@ -12,7 +12,7 @@ mod mdb;
 pub use cap::{Cap, CapTag, CapTableEntry};
 pub use cnode::{CNode, TCBCNodeIndex};
 use crate::boot::NDKS_BOOT;
-use crate::cspace::cap::{is_cap_revocable};
+use crate::cspace::cap::is_cap_revocable;
 use crate::cspace::CapTag::CapCNodeCap;
 use crate::untyped::set_untyped_cap_as_full;
 use crate::mm::VmRights;
@@ -94,7 +94,7 @@ pub fn write_slot(cnode_ptr: Pptr, index: usize, cap: Cap) {
     cnode.write(index, cap);
 }
 
-pub fn derive_cap(slot: &mut CapTableEntry, cap: Cap) -> (bool, Cap) {
+pub fn derive_cap(_slot: &mut CapTableEntry, cap: Cap) -> (bool, Cap) {
     return match cap.get_cap_type() {
         CapTag::CapFrameCap => {
             let mut new_cap = cap;

@@ -148,7 +148,7 @@ impl CapTableEntry {
         return false;
     }
 
-    pub fn emplty_slot(&mut self, cleanup_info: Cap) {
+    pub fn emplty_slot(&mut self, _cleanup_info: Cap) {
         if self.cap.get_cap_type() != CapTag::CapNullCap {
             let mdb_node = self.mdb_node;
             if mdb_node.get_mdb_prev() != 0 {
@@ -168,7 +168,7 @@ impl CapTableEntry {
         }
     }
 
-    pub fn finalise_slot(&mut self, immediate: bool) -> Option<Cap>{
+    pub fn finalise_slot(&mut self, _immediate: bool) -> Option<Cap>{
 
         while self.cap.get_cap_type() != CapTag::CapNullCap {
             let is_final = self.is_final_cap();
@@ -380,14 +380,14 @@ pub fn is_cap_revocable(derived_cap: Cap, src_cap: Cap) -> bool {
     }
 }
 
-pub fn is_cap_removable(cap: Cap, slot: &CapTableEntry) -> bool {
+pub fn is_cap_removable(cap: Cap, _slot: &CapTableEntry) -> bool {
     match cap.get_cap_type() {
         CapTag::CapNullCap => {
             return true;
         }
 
         _ => {
-            panic!()
+            panic!("[is_cap_removable] unsupported")
         }
     }
 }
@@ -398,7 +398,7 @@ struct FinaliseCapRet {
     pub cleanup_info: Cap,
 }
 
-fn finalise_cap(cap: Cap, is_final: bool, exposed: bool) -> FinaliseCapRet {
+fn finalise_cap(cap: Cap, _is_final: bool, _exposed: bool) -> FinaliseCapRet {
     match cap.get_cap_type() {
         _ => {
             FinaliseCapRet {

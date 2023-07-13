@@ -6,6 +6,8 @@ KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
 
 ROOT_SERVER_BIN := ../root_server/target/$(TARGET)/$(MODE)/root_server.bin
+USER_BINS := ../user/target/$(TARGET)/$(MODE)/
+
 ROOT_SERVER_ENTRY_PA := 0x82000000
 
 # Building mode argument
@@ -28,7 +30,7 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 # Disassembly
 DISASM ?= -x
 
-build:  $(KERNEL_BIN)
+build:  $(KERNEL_BIN) $(ROOT_SERVER_BIN)  $(USER_BINS)
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -39,15 +41,21 @@ env:
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
+$(ROOT_SERVER_BIN):
+	@cd ../root_server && make build
+
+$(USER_BINS):
+	@cd ../user && make build
+
 kernel:
 	@echo Platform: $(BOARD)
-	@cd ../root_server && make build
 	@cp src/linker-$(BOARD).ld src/linker.ld
 	@cargo build $(MODE_ARG)
 	@rm src/linker.ld
 
 clean:
 	@cd ../root_server && make clean
+	@cd ../user && make clean
 	@cd ../syscall && cargo clean
 	@cd ../user_lib && cargo clean
 	@cd ../common && cargo clean

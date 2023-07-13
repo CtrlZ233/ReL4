@@ -7,7 +7,7 @@ use log::{debug, error};
 use crate::{inner_syscall::{CUR_EXTRA_CAPS, get_syscall_arg}, cspace::{CapTableEntry, Cap, lookup_target_slot}, scheduler::set_thread_state};
 
 pub fn decode_untyped_invocation(inv_label: usize, length: usize, slot: &mut CapTableEntry, cap: Cap,
-    call: bool, buffer: Pptr) {
+    _call: bool, buffer: Pptr) {
     
     assert!(inv_label == InvocationLabel::UntypedRetype as usize && length >= 6);
     let new_type = ObjectType::from_usize(get_syscall_arg(0, buffer));
@@ -140,6 +140,7 @@ pub fn create_object(new_type: ObjectType,  region_base: Pptr, user_size: usize,
             let tcb = convert_to_mut_type_ref::<TCB>(region_base + TCB_OFFSET);
             tcb.init_context();
             tcb.tcb_domain = 0;
+            tcb.tcb_time_slice = CONFIG_TIME_SLICE;
             return Cap::new_thread_cap(region_base + TCB_OFFSET);
         }
         _ => {
@@ -149,14 +150,14 @@ pub fn create_object(new_type: ObjectType,  region_base: Pptr, user_size: usize,
     Cap::new_null_cap()
 }
 
-pub fn create_arch_object(new_type: ObjectType,  region_base: Pptr, user_size: usize, device_mem: bool) -> Cap {
+pub fn create_arch_object(new_type: ObjectType,  region_base: Pptr, _user_size: usize, device_mem: bool) -> Cap {
     match new_type {
-        ObjectType::RISCV_4KPage => {
+        ObjectType::Riscv4kpage => {
             Cap::new_frame_cap(0, region_base,  0,
                 VmRights::VMReadWrite as usize, device_mem, 0)
         }
 
-        ObjectType::RISCV_PageTableObject => {
+        ObjectType::RiscvPageTableObject=> {
             Cap::new_page_table_cap(0, region_base, false, 0)
         }
         _ => {

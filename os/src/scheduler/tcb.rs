@@ -16,12 +16,6 @@ use crate::cspace::TCBCNodeIndex::{TCBBuffer, TCBCTable, TCBReply};
 use crate::scheduler::endpoint::{EndPoint, EndPointState};
 use crate::scheduler::ThreadStateEnum::{ThreadStateInactive, ThreadStateRunning};
 
-pub type ThreadControlFlag = usize;
-pub const THREAD_CONTROL_UPDATE_PRIORITY: usize = 0x1;
-pub const THREAD_CONTROL_UPDATE_IPC_BUFFER: usize = 0x2;
-pub const THREAD_CONTROL_UPDATE_SPACE: usize = 0x4;
-pub const THREAD_CONTROL_UPDATE_MCP: usize = 0x8;
-
 #[derive(Default)]
 pub struct TCB {
     context: RiscvContext,
@@ -78,6 +72,7 @@ impl TCB {
 
     pub fn restart(&mut self) {
         if self.is_stopped() {
+            debug!("status: {:?}", self.get_state());
             self.cancel_ipc();
             self.setup_replay_master();
             self.set_thread_state(ThreadStateEnum::ThreadStateRestart);
@@ -170,6 +165,33 @@ impl TCB {
             self.tcb_sched_prev = 0;
             self.tcb_sched_next = queue.head as usize;
             queue.head = self as *mut TCB;
+            unsafe {
+                KS_READY_QUEUES[idx] = queue;
+            }
+            self.tcb_state.set_tcb_queued(true);
+        }
+    }
+
+    pub fn append_to_sched(&mut self) {
+        if !self.tcb_state.is_get_tcb_queued() {
+            let dom =  self.tcb_domain;
+            let prio = self.tcb_priority;
+            let idx = ready_queues_index(dom, prio);
+            let mut queue = unsafe {
+                KS_READY_QUEUES[idx]
+            };
+
+            if queue.head as usize == 0 {
+                queue.head = self as *mut TCB;
+                add_to_bitmap(hart_id(), dom, prio);
+            } else {
+                unsafe {
+                    (&mut *(queue.end)).tcb_sched_prev = self as *mut TCB as usize;
+                }
+            }
+            self.tcb_sched_prev = queue.end as usize;
+            self.tcb_sched_next = 0;
+            queue.end = self as *mut TCB;
             unsafe {
                 KS_READY_QUEUES[idx] = queue;
             }
@@ -411,7 +433,7 @@ struct LookUpFault {
 
 pub type TCBCNode = [CapTableEntry; 16];
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum ThreadStateEnum {
     ThreadStateInactive = 0,
     ThreadStateRunning = 1,
